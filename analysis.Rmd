@@ -1,0 +1,76 @@
+---
+title: "Analysis plan"
+author: "Flora Janku"
+date: "2024-11-21"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("tidyverse")
+library(tidyverse)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Loading df
+
+```{r}
+media_blind <- read.csv("C:/Users/flora/OneDrive/Dokumentumok/GitHub/TDK_analysis/media_blind.csv")
+view(media_blind)
+str(media_blind)
+```
+
+## Calculating variables
+
+```{r}
+media_blind_calc <- media_blind %>%
+  mutate(panas_baseline_arousal = panas_baseline_3 + panas_baseline_9,
+         panas_beforetask_arousal = panas_beforetask_3 + panas_beforetask_9,
+         panas_aftertask_arousal = panas_aftertask_3 + panas_aftertask_9,
+         panas_baseline_mean = panas_baseline_arousal / 2,
+         panas_beforetask_mean = panas_beforetask_arousal / 2,
+         panas_aftertask_mean = panas_aftertask_arousal / 2,
+         mf_baseline = mf_baseline_1 + mf_baseline_2 + mf_baseline_3 + mf_baseline_4,
+         mf_baseline_mean = mf_baseline / 4)
+
+media_blind_cycle <- media_blind_calc %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(cycle_day)) %>%
+  mutate(cycle_length = ifelse(is.na(cycle_length), 28, cycle_length))
+
+media_df <- media_blind_cycle %>%
+  mutate(cycle_length = ifelse(cycle_length < 20, 28, cycle_length))
+
+glimpse(media_df)
+
+```
+
+
+## Creating subset for analysis
+
+```{r}
+
+```
+
+
+
