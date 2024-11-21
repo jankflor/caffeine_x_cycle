@@ -13,37 +13,33 @@ install.packages("tidyverse")
 library(tidyverse)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
 ## Loading df
 
 ```{r}
-media_blind <- read.csv("C:/Users/flora/OneDrive/Dokumentumok/GitHub/TDK_analysis/media_blind.csv")
+media_blind <- read.csv("C:/Users/flora/OneDrive/Dokumentumok/GitHub/TDK_analysis/media_blind_final.csv")
 view(media_blind)
 str(media_blind)
 ```
 
+## Data tidying
+
+```{r}
+#No values between 10 and 20, values below 20 need to be replaced in the relevant group
+summary(media_blind$cycle_length)
+media_blind %>%
+  ggplot() +
+  aes(cycle_length) +
+  geom_histogram()
+
+#No duplicates
+sum(duplicated(media_blind$PARTICIPANT_ID))
+```
+
+
 ## Calculating variables
 
 ```{r}
+#Calculated PANAS and baseline MF means
 media_blind_calc <- media_blind %>%
   mutate(panas_baseline_arousal = panas_baseline_3 + panas_baseline_9,
          panas_beforetask_arousal = panas_beforetask_3 + panas_beforetask_9,
@@ -54,21 +50,90 @@ media_blind_calc <- media_blind %>%
          mf_baseline = mf_baseline_1 + mf_baseline_2 + mf_baseline_3 + mf_baseline_4,
          mf_baseline_mean = mf_baseline / 4)
 
+#Create df for hypotheses not regarding menstrual cycle phase
+#Removed NA from contracept
+media_df_general <- media_blind_calc %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept)) %>%
+  group_by(contracept) %>%
+  count()
+
+#Create df for hypotheses regarding menstrual cycle phases
+#Replaced NA in cycle_length with 28 in the appropriate group of women
 media_blind_cycle <- media_blind_calc %>%
   filter(gender == "Female", cycle_regular == "Yes", !is.na(cycle_day)) %>%
   mutate(cycle_length = ifelse(is.na(cycle_length), 28, cycle_length))
 
-media_df <- media_blind_cycle %>%
+#Replaced cycle_length values below 20 with 28
+media_df_cycle <- media_blind_cycle %>%
   mutate(cycle_length = ifelse(cycle_length < 20, 28, cycle_length))
 
-glimpse(media_df)
+media_df_cycle %>%
+  group_by(contracept) %>%
+  count()
 
+#Calculate cycle day at the time of the session
+screener_date <- as.Date(media_df_cycle$screener_RecordedDate)
+onsite_date <- as.Date(media_df_cycle$onsite_RecordedDate)
+
+as.numeric(screener_date)
+as.numeric(onsite_date)
+
+media_cycle <- media_df_cycle %>%
+  mutate(days_between = as.numeric(onsite_date - screener_date),
+         current_day = (cycle_day + days_between - 1) %% cycle_length + 1) %>%
+  glimpse()
+
+#Calculate cycle phase at the time of the session - 3-phase model
+
+df_3 <- media_cycle %>%
+  mutate(
+    follicular_end = floor(2.75 / 7 * cycle_length),
+    ovulatory_start = follicular_end + 1,
+    ovulatory_end = floor((2.75 + 0.75) / 7 * cycle_length),
+    luteal_start = ovulatory_end + 1)
+
+df_3 %>%
+  mutate(cycle_phase_3 = case_when(
+  current_day <= follicular_end ~ "follicular",
+  current_day >= ovulatory_start & current_day <= ovulatory_end ~ "ovulatory",
+  current_day >= luteal_start ~ "luteal",
+  TRUE ~ NA_character_))
+
+#Calculate cycle phase at the time of the session - 5-phase model
+df_5 <- media_cycle %>%
+  mutate(
+    menstrual_end = floor(1.75 / 7 * cycle_length),
+    midfollicular_start = menstrual_end + 1,
+    midfollicular_end = floor((1.75 + 1.25) / 7 * cycle_length),
+    ovulatory_start = midfollicular_end + 1,
+    ovulatory_end = floor((1.75 + 1.25 + 1) / 7 * cycle_length),
+    midluteal_start = ovulatory_end + 1,
+    midluteal_end = floor((1.75 + 1.25 + 1 + 1.25) / 7 * cycle_length),
+    premenstrual_start = midluteal_end + 1)
+
+df_5 %>%
+  mutate(cycle_phase_5 = case_when(
+  current_day <= menstrual_end ~ "menstrual",
+  current_day >= midfollicular_start & current_day <= midfollicular_end ~ "midfollicular",
+  current_day >= ovulatory_start & current_day <= ovulatory_end ~ "ovulatory",
+  current_day >= midluteal_start & current_day <= midluteal_end ~ "midluteal",
+  current_day >= premenstrual_start ~ "premenstrual",
+  TRUE ~ NA_character_))
 ```
 
 
-## Creating subset for analysis
+## Exploratory data analysis
 
 ```{r}
+#Df's used will be: media_df_general (for everything not including cycle phases), df_3 (for 3-phase model) and df_5 (for 5-phase model)
+
+#Overview of the df
+summary(media_df)
+
+media_df %>%
+  ggplot() +
+  aes(contracept) +
+  geom_bar()
 
 ```
 
