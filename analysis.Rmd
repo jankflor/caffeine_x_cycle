@@ -23,7 +23,21 @@ library(lme4)
 media_blind <- read.csv("C:/Users/flora/OneDrive/Dokumentumok/GitHub/TDK_analysis/media_blind_final.csv")
 view(media_blind)
 str(media_blind)
+colnames(media_blind)
 ```
+
+## Pivoting
+
+```{r}
+media_df <- media_blind[ , c("PARTICIPANT_ID", "condition", "screener_RecordedDate", "onsite_RecordedDate", "age", "gender", "contracept", "cycle_regular", "cycle_length", "cycle_day", "caffeine_perday", "panas_baseline_3", "panas_baseline_9", "panas_beforetask_3", "panas_beforetask_9", "panas_aftertask_3", "panas_aftertask_9", "mf_baseline_1", "mf_baseline_2", "mf_baseline_3", "mf_baseline_4", "vs_baseline_avg_accuracy", "vs_end_avg_accuracy", "eda_avg_baseline", "eda_avg_before_task")]
+glimpse(media_df)
+media_long <- pivot_longer(media_df, cols = c("panas_baseline_3", "panas_baseline_9", "panas_beforetask_3", "panas_beforetask_9", "panas_aftertask_3", "panas_aftertask_9", "mf_baseline_1", "mf_baseline_2", "mf_baseline_3", "mf_baseline_4", "vs_baseline_avg_accuracy", "vs_end_avg_accuracy", "eda_avg_baseline", "eda_avg_before_task"), names_to = c("PANAS", "mf", "vs_accuracy", "eda"), names_sep = "_", values_to = "value")
+media_filtered <- media_long %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(condition))
+
+lmer(PANAS ~ condition * caffeine_perday + (1 | PARTICIPANT_ID), data = media_filtered)
+```
+
 
 ## Data tidying
 
@@ -136,7 +150,6 @@ df_5 <- df_5_calc %>%
   current_day >= premenstrual_start ~ "premenstrual",
   TRUE ~ NA_character_))
 ```
-
 
 ## Exploratory data analysis
 
