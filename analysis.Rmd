@@ -11,6 +11,10 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 install.packages("tidyverse")
 library(tidyverse)
+install.packages("GGally")
+library(GGally)
+install.packages("lme4")
+library(lme4)
 ```
 
 ## Loading df
@@ -24,6 +28,11 @@ str(media_blind)
 ## Data tidying
 
 ```{r}
+#Finding missing values in condition
+media_blind %>%
+  filter(is.na(condition)) %>%
+  count()
+
 #No values between 10 and 20, values below 20 need to be replaced in the relevant group
 summary(media_blind$cycle_length)
 media_blind %>%
@@ -39,7 +48,7 @@ sum(duplicated(media_blind$PARTICIPANT_ID))
 ## Calculating variables
 
 ```{r}
-#Calculated PANAS and baseline MF means
+#Calculated PANAS, baseline MF and VS task performance change means
 media_blind_calc <- media_blind %>%
   mutate(panas_baseline_arousal = panas_baseline_3 + panas_baseline_9,
          panas_beforetask_arousal = panas_beforetask_3 + panas_beforetask_9,
@@ -48,19 +57,22 @@ media_blind_calc <- media_blind %>%
          panas_beforetask_mean = panas_beforetask_arousal / 2,
          panas_aftertask_mean = panas_aftertask_arousal / 2,
          mf_baseline = mf_baseline_1 + mf_baseline_2 + mf_baseline_3 + mf_baseline_4,
-         mf_baseline_mean = mf_baseline / 4)
+         mf_baseline_mean = mf_baseline / 4,
+         vs_change = vs_end_avg_accuracy - vs_baseline_avg_accuracy)
 
 #Create df for hypotheses not regarding menstrual cycle phase
 #Removed NA from contracept
 media_df_general <- media_blind_calc %>%
-  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept)) %>%
-  group_by(contracept) %>%
-  count()
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept), !is.na(condition)) %>%
+  group_by(contracept)
+
+media_df_general %>%
+  colnames()
 
 #Create df for hypotheses regarding menstrual cycle phases
 #Replaced NA in cycle_length with 28 in the appropriate group of women
 media_blind_cycle <- media_blind_calc %>%
-  filter(gender == "Female", cycle_regular == "Yes", !is.na(cycle_day)) %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(cycle_day), !is.na(condition)) %>%
   mutate(cycle_length = ifelse(is.na(cycle_length), 28, cycle_length))
 
 #Replaced cycle_length values below 20 with 28
@@ -69,6 +81,10 @@ media_df_cycle <- media_blind_cycle %>%
 
 media_df_cycle %>%
   group_by(contracept) %>%
+  count()
+
+media_df_cycle %>%
+  filter(is.na(condition)) %>%
   count()
 
 #Calculate cycle day at the time of the session
@@ -85,14 +101,14 @@ media_cycle <- media_df_cycle %>%
 
 #Calculate cycle phase at the time of the session - 3-phase model
 
-df_3 <- media_cycle %>%
+df_3_calc <- media_cycle %>%
   mutate(
     follicular_end = floor(2.75 / 7 * cycle_length),
     ovulatory_start = follicular_end + 1,
     ovulatory_end = floor((2.75 + 0.75) / 7 * cycle_length),
     luteal_start = ovulatory_end + 1)
 
-df_3 %>%
+df_3 <- df_3_calc %>%
   mutate(cycle_phase_3 = case_when(
   current_day <= follicular_end ~ "follicular",
   current_day >= ovulatory_start & current_day <= ovulatory_end ~ "ovulatory",
@@ -100,7 +116,7 @@ df_3 %>%
   TRUE ~ NA_character_))
 
 #Calculate cycle phase at the time of the session - 5-phase model
-df_5 <- media_cycle %>%
+df_5_calc <- media_cycle %>%
   mutate(
     menstrual_end = floor(1.75 / 7 * cycle_length),
     midfollicular_start = menstrual_end + 1,
@@ -111,7 +127,7 @@ df_5 <- media_cycle %>%
     midluteal_end = floor((1.75 + 1.25 + 1 + 1.25) / 7 * cycle_length),
     premenstrual_start = midluteal_end + 1)
 
-df_5 %>%
+df_5 <- df_5_calc %>%
   mutate(cycle_phase_5 = case_when(
   current_day <= menstrual_end ~ "menstrual",
   current_day >= midfollicular_start & current_day <= midfollicular_end ~ "midfollicular",
@@ -125,17 +141,264 @@ df_5 %>%
 ## Exploratory data analysis
 
 ```{r}
-#Df's used will be: media_df_general (for everything not including cycle phases), df_3 (for 3-phase model) and df_5 (for 5-phase model)
+#Df's used will be: general (for everything not including cycle phases), cycle_model_3 (for 3-phase model) and cycle_model_5 (for 5-phase model)
+
+general <- media_df_general[ , c('PARTICIPANT_ID', 'condition', 'age', 'contracept',  'cycle_length', 'cycle_day', 'caffeine_perday', 'panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_avg_baseline', 'eda_avg_before_task', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy', 'vs_change', 'mf_baseline')]
+
+cycle_model_3 <- df_3[ , c('PARTICIPANT_ID', 'condition', 'age', 'contracept',  'cycle_length', 'cycle_day', 'cycle_phase_3', 'caffeine_perday', 'panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_avg_baseline', 'eda_avg_before_task', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy', 'vs_change', 'mf_baseline')]
+
+cycle_model_5 <- df_5[ , c('PARTICIPANT_ID', 'condition', 'age', 'contracept',  'cycle_length', 'cycle_day', 'cycle_phase_5', 'caffeine_perday', 'panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_avg_baseline', 'eda_avg_before_task', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy', 'vs_change', 'mf_baseline')]
 
 #Overview of the df
-summary(media_df)
+summary(general)
+summary(cycle_model_3)
+summary(cycle_model_5)
 
-media_df %>%
+#Plots for variables of interest
+general %>%
   ggplot() +
-  aes(contracept) +
-  geom_bar()
+  aes(panas_baseline_mean) +
+  geom_histogram() +
+  facet_grid(condition ~ contracept) +
+  labs(title = "Baseline subjective arousal by contraception status and condition")
+
+general %>%
+  ggplot() +
+  aes(panas_beforetask_mean) +
+  geom_histogram() +
+  facet_grid(condition ~ contracept) +
+  labs(title = "Subjective arousal before VS task by contraception status and condition")
+
+general %>%
+  ggplot() +
+  aes(panas_aftertask_mean) +
+  geom_histogram() +
+  facet_grid(condition ~ contracept) +
+  labs(title = "Subjective arousal after VS task by contraception status and condition")
+
+general %>%
+  ggplot() +
+  aes(eda_avg_baseline) +
+  geom_histogram() +
+  facet_grid(condition ~ contracept) +
+  labs(title = "Baseline EDA by contraception status and condition")
+
+general %>%
+  ggplot() +
+  aes(eda_avg_before_task) +
+  geom_histogram() +
+  facet_grid(condition ~ contracept) +
+  labs(title = "EDA before VS task by contraception status and condition")
+
+cycle_model_3 %>%
+  ggplot() +
+  aes(vs_change) +
+  geom_histogram() +
+  facet_grid(condition ~ cycle_phase_3) +
+  labs(title = "VS accuracy change by cycle phase and condition")
+
+cycle_model_5 %>%
+  ggplot() +
+  aes(vs_change) +
+  geom_histogram() +
+  facet_grid(condition ~ cycle_phase_5) +
+  labs(title = "VS accuracy change by cycle phase and condition")
+
+table(cycle_model_3$condition, cycle_model_3$cycle_phase_3)
+
+table(cycle_model_5$condition, cycle_model_5$cycle_phase_5)
+
+#Boxplots
+
+ggplot(general, aes(x = condition, y = panas_baseline_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = condition, y = panas_beforetask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = condition, y = panas_aftertask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = panas_baseline_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = panas_beforetask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = panas_aftertask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = eda_avg_baseline)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = eda_avg_before_task)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = vs_baseline_avg_accuracy)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = vs_end_avg_accuracy)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(general, aes(x = contracept, y = vs_change)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = eda_avg_baseline)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = eda_avg_before_task)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = panas_baseline_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = panas_beforetask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = panas_aftertask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = vs_baseline_avg_accuracy)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = vs_end_avg_accuracy)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_3, aes(x = cycle_phase_3, y = vs_change)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = vs_baseline_avg_accuracy)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = vs_end_avg_accuracy)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = vs_change)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = panas_baseline_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = panas_beforetask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = panas_aftertask_mean)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = eda_avg_baseline)) +
+  geom_boxplot() +
+  theme_minimal()
+
+ggplot(cycle_model_5, aes(x = cycle_phase_5, y = eda_avg_before_task)) +
+  geom_boxplot() +
+  theme_minimal()
 
 ```
 
+## Checking for model assumptions
+
+```{r}
+#Linearity
+general_pairs <- general[ , c('condition', 'age', 'contracept',  'cycle_length', 'cycle_day', 'caffeine_perday', 'panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_avg_baseline', 'eda_avg_before_task', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy', 'vs_change', 'mf_baseline')]
+
+ggpairs(general_pairs)
+
+general %>%
+  ggplot() +
+  aes(panas_baseline_mean, contracept) +
+  geom_point() +
+  labs(title = "Scatterplot of baseline subjective arousal and contraception status")
+
+general %>%
+  ggplot() +
+  aes(panas_baseline_mean, as.numeric(contracept)) +
+  geom_point() +
+  labs(title = "Scatterplot of baseline subjective arousal and contraception status")
+
+general %>%
+  ggplot() +
+  aes(panas_beforetask_mean, contracept) +
+  geom_point() +
+  labs(title = "Scatterplot of subjective arousal before the VS task and contraception status")
+
+general %>%
+  ggplot() +
+  aes(panas_aftertask_mean, contracept) +
+  geom_point() +
+  labs(title = "Scatterplot of subjective arousal after VS task and contraception status")
+
+general %>%
+  ggplot() +
+  aes(eda_avg_baseline, contracept) +
+  geom_point() +
+  labs(title = "Scatterplot of baseline EDA and contraception status")
+
+general %>%
+  ggplot() +
+  aes(eda_avg_before_task, contracept) +
+  geom_point() +
+  labs(title = "Scatterplot of EDA before the VS task and contraception status")
+
+cycle_model_3 %>%
+  ggplot() +
+  aes(vs_baseline_avg_accuracy, cycle_phase_3) +
+  geom_point() +
+  labs(title = "Scatterplot of VS task baseline accuracy and cycle phase")
+
+cycle_model_3 %>%
+  ggplot() +
+  aes(vs_end_avg_accuracy, cycle_phase_3) +
+  geom_point() +
+  labs(title = "Scatterplot of VS task end accuracy and cycle phase")
+
+cycle_model_3 %>%
+  ggplot() +
+  aes(panas_baseline_mean, cycle_phase_3) +
+  geom_point() +
+  labs(title = "Scatterplot of baseline subjective arousal and cycle phase")
+
+anova_model <- aov(panas_baseline_mean ~ contracept, data = general)
+summary(anova_model)
+
+anova_model <- aov(panas_beforetask_mean ~ contracept, data = general)
+summary(anova_model)
+
+anova_model <- aov(panas_aftertask_mean ~ contracept, data = general)
+summary(anova_model)
+
+anova_model <- aov(panas_beforetask_mean ~ cycle_phase_3, data = cycle_model_3)
+summary(anova_model)
+```
+
+## Building the models
+
+```{r}
+model1 <- lmer(panas_beforetask_mean ~ contracept * condition + (1 | PARTICIPANT_ID), data = general)
+```
 
 
