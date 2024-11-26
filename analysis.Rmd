@@ -15,6 +15,8 @@ install.packages("GGally")
 library(GGally)
 install.packages("lme4")
 library(lme4)
+install.packages("performance")
+library(performance)
 ```
 
 ## Loading df
@@ -25,19 +27,6 @@ view(media_blind)
 str(media_blind)
 colnames(media_blind)
 ```
-
-## Pivoting
-
-```{r}
-media_df <- media_blind[ , c("PARTICIPANT_ID", "condition", "screener_RecordedDate", "onsite_RecordedDate", "age", "gender", "contracept", "cycle_regular", "cycle_length", "cycle_day", "caffeine_perday", "panas_baseline_3", "panas_baseline_9", "panas_beforetask_3", "panas_beforetask_9", "panas_aftertask_3", "panas_aftertask_9", "mf_baseline_1", "mf_baseline_2", "mf_baseline_3", "mf_baseline_4", "vs_baseline_avg_accuracy", "vs_end_avg_accuracy", "eda_avg_baseline", "eda_avg_before_task")]
-glimpse(media_df)
-media_long <- pivot_longer(media_df, cols = c("panas_baseline_3", "panas_baseline_9", "panas_beforetask_3", "panas_beforetask_9", "panas_aftertask_3", "panas_aftertask_9", "mf_baseline_1", "mf_baseline_2", "mf_baseline_3", "mf_baseline_4", "vs_baseline_avg_accuracy", "vs_end_avg_accuracy", "eda_avg_baseline", "eda_avg_before_task"), names_to = c("PANAS", "mf", "vs_accuracy", "eda"), names_sep = "_", values_to = "value")
-media_filtered <- media_long %>%
-  filter(gender == "Female", cycle_regular == "Yes", !is.na(condition))
-
-lmer(PANAS ~ condition * caffeine_perday + (1 | PARTICIPANT_ID), data = media_filtered)
-```
-
 
 ## Data tidying
 
@@ -72,16 +61,17 @@ media_blind_calc <- media_blind %>%
          panas_aftertask_mean = panas_aftertask_arousal / 2,
          mf_baseline = mf_baseline_1 + mf_baseline_2 + mf_baseline_3 + mf_baseline_4,
          mf_baseline_mean = mf_baseline / 4,
-         vs_change = vs_end_avg_accuracy - vs_baseline_avg_accuracy)
+         vs_change = vs_end_avg_accuracy - vs_baseline_avg_accuracy,
+         caffeine_perday = str_remove(caffeine_perday, " mg/day"))
+
+glimpse(media_blind_calc)
 
 #Create df for hypotheses not regarding menstrual cycle phase
 #Removed NA from contracept
 media_df_general <- media_blind_calc %>%
-  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept), !is.na(condition)) %>%
-  group_by(contracept)
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept), !is.na(condition))
 
-media_df_general %>%
-  colnames()
+glimpse(media_df_general)
 
 #Create df for hypotheses regarding menstrual cycle phases
 #Replaced NA in cycle_length with 28 in the appropriate group of women
@@ -151,17 +141,61 @@ df_5 <- df_5_calc %>%
   TRUE ~ NA_character_))
 ```
 
-## Exploratory data analysis
+## Pivoting to long format
 
 ```{r}
-#Df's used will be: general (for everything not including cycle phases), cycle_model_3 (for 3-phase model) and cycle_model_5 (for 5-phase model)
+#Df's used will be: general_long (for everything not including cycle phases), cm_3_long (for 3-phase model) and cm_5_long (for 5-phase model)
 
 general <- media_df_general[ , c('PARTICIPANT_ID', 'condition', 'age', 'contracept',  'cycle_length', 'cycle_day', 'caffeine_perday', 'panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_avg_baseline', 'eda_avg_before_task', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy', 'vs_change', 'mf_baseline')]
 
+print(general)
+
+general_renamed <- general %>%
+  rename(eda_baseline_avg = eda_avg_baseline,
+         eda_beforetask_avg = eda_avg_before_task)
+
+general_long <- pivot_longer(general_renamed, cols = c('panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_baseline_avg', 'eda_beforetask_avg', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy'), names_to = c("measure", "time"), names_sep = "_", values_to = "value")
+                             
+print(general_long)
+
+glimpse(general_long)
+
 cycle_model_3 <- df_3[ , c('PARTICIPANT_ID', 'condition', 'age', 'contracept',  'cycle_length', 'cycle_day', 'cycle_phase_3', 'caffeine_perday', 'panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_avg_baseline', 'eda_avg_before_task', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy', 'vs_change', 'mf_baseline')]
+
+cm_3_renamed <- cycle_model_3 %>%
+  rename(eda_baseline_avg = eda_avg_baseline,
+         eda_beforetask_avg = eda_avg_before_task)
+
+cm_3_long <- pivot_longer(cm_3_renamed, cols = c('panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_baseline_avg', 'eda_beforetask_avg', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy'), names_to = c("measure", "time"), names_sep = "_", values_to = "value")
+
+glimpse(cm_3_long)
 
 cycle_model_5 <- df_5[ , c('PARTICIPANT_ID', 'condition', 'age', 'contracept',  'cycle_length', 'cycle_day', 'cycle_phase_5', 'caffeine_perday', 'panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_avg_baseline', 'eda_avg_before_task', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy', 'vs_change', 'mf_baseline')]
 
+cm_5_renamed <- cycle_model_5 %>%
+  rename(eda_baseline_avg = eda_avg_baseline,
+         eda_beforetask_avg = eda_avg_before_task)
+
+cm_5_long <- pivot_longer(cm_5_renamed, cols = c('panas_baseline_mean', 'panas_beforetask_mean', 'panas_aftertask_mean', 'eda_baseline_avg', 'eda_beforetask_avg', 'vs_baseline_avg_accuracy', 'vs_end_avg_accuracy'), names_to = c("measure", "time"), names_sep = "_", values_to = "value")
+
+glimpse(cm_5_long)
+```
+
+## Model time
+
+```{r}
+model1 <- lmer(value ~ condition * contracept + measure + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = general_long)
+
+plot(model1)
+check_model(model1)
+autoplot(model1, which = 1:3)
+```
+
+
+
+## Exploratory data analysis
+
+```{r}
 #Overview of the df
 summary(general)
 summary(cycle_model_3)
@@ -219,7 +253,11 @@ cycle_model_5 %>%
 
 table(cycle_model_3$condition, cycle_model_3$cycle_phase_3)
 
+table(cycle_model_3$contracept, cycle_model_3$cycle_phase_3)
+
 table(cycle_model_5$condition, cycle_model_5$cycle_phase_5)
+
+table(cycle_model_5$contracept, cycle_model_5$cycle_phase_5)
 
 #Boxplots
 
