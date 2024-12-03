@@ -233,7 +233,6 @@ contrasts(woman_long$cycle_phase3) <- contr.sum(levels(woman_long$cycle_phase3))
 contrasts(woman_long$cycle_phase5) <- contr.sum(levels(woman_long$cycle_phase5))
 
 ## Subjective arousal models
-
 model_panas_1 <-
   woman_long |> 
   filter(measure == "panas") |> 
@@ -250,7 +249,9 @@ model_performance(model_panas_1)
 model_panas_2 <-
   woman_long |>
   filter(measure == "panas") |>
-  lmer(value ~ condition * contracept * cycle_phase3 * time + caffeine_perday + mf_baseline_mean + 
+  lmer(value ~ condition * contracept * cycle_phase3 +
+         condition * time * cycle_phase3 +
+         caffeine_perday + mf_baseline_mean + 
          (1 | PARTICIPANT_ID), 
        data = _)
 summary(model_panas_2)
@@ -262,8 +263,9 @@ model_performance(model_panas_2)
 model_panas_3 <-
   woman_long |>
   filter(measure == "panas") |>
-  lmer(value ~ condition * contracept + cycle_phase5 + 
-         time + caffeine_perday + mf_baseline_mean + 
+  lmer(value ~ condition * contracept * cycle_phase5 +
+         condition * time * cycle_phase5 +
+         caffeine_perday + mf_baseline_mean + 
          (1 | PARTICIPANT_ID), 
        data = _)
 summary(model_panas_3)
@@ -273,13 +275,14 @@ check_model(model_panas_3)
 emmeans(model_panas_3, pairwise ~ condition * contracept * cycle_phase5)
 model_performance(model_panas_3)
 
+
 ## Physiological arousal models
 
 model_eda_1 <-
   woman_long |>
   filter(measure == "eda") |>
-  lmer(value ~ condition * contracept *
-         time + caffeine_perday + mf_baseline_mean +
+  lmer(value ~ condition * contracept * time +
+         caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_eda_1)
@@ -292,7 +295,8 @@ model_eda_2 <-
   woman_long |>
   filter(measure == "eda") |>
   lmer(value ~ condition * contracept * cycle_phase3 +
-         time + caffeine_perday + mf_baseline_mean +
+         condition * time * cycle_phase3 +
+         caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_eda_2)
@@ -304,8 +308,10 @@ model_performance(model_eda_2)
 model_eda_3 <-
   woman_long |>
   filter(measure == "eda") |>
-  lmer(value ~ condition * contracept * cycle_phase5 +
-         time + caffeine_perday + mf_baseline_mean +
+  lmer(value ~ condition * cycle_phase5 * contracept +
+         condition * time +
+         cycle_phase5 * time +
+         caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_eda_3)
