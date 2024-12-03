@@ -18,6 +18,7 @@ install.packages("sandwich")
 install.packages("lmtest")
 install.packages("robustlmm")
 install.packages("gamm4")
+install.packages("emmeans")
 ```
 
 ```{r setup, include=FALSE}
@@ -31,6 +32,7 @@ library(lmtest)
 library(robustlmm)
 library(gamm4)
 library(skimr)
+library(emmeans)
 
 theme_set(theme_minimal())
 
@@ -76,6 +78,7 @@ woman_normcycle <-
   mutate(# Setting baselines
          condition = fct_relevel(condition, "placebo"),
          contracept = fct_relevel(contracept, "No"),
+         caffeine_perday = fct_relevel(caffeine_perday, c("I don't consume caffeine", "25-55 mg/day", "75-80 mg/day", "80-100 mg/day", "100-130 mg/day", "130-160 mg/day", "160-240 mg/day", "240-320 mg/day", "320-400 mg/day")),
          # Calculating scales
          panas_baseline_mean = (panas_baseline_3 + panas_baseline_9)/2,
          panas_beforetask_mean = (panas_beforetask_3 + panas_beforetask_9)/2,
@@ -102,245 +105,6 @@ woman_normcycle <-
                                 current_day > floor(5.25 / 7 * cycle_length) ~ "premenstrual",
                                 TRUE ~ NA_character_) |> 
                         fct_relevel(c("menstrual", "midfollicular", "ovulatory", "midluteal", "premenstrual")))
-
-```
-
-## Exploratory data analysis
-
-```{r}
-#Plots for variables of interest
-##PANAS baseline
-woman_normcycle %>%
-  ggplot() +
-  aes(panas_baseline_mean) +
-  geom_histogram() +
-  theme_minimal()
-
-woman_normcycle %>%
-  ggplot() +
-  aes(panas_baseline_mean) +
-  geom_histogram() +
-  facet_grid(condition ~ contracept) +
-  labs(title = "Baseline subjective arousal by contraception status and condition") +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = condition, y = panas_baseline_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = panas_baseline_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = panas_baseline_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = panas_baseline_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-## PANAS beforetask
-woman_normcycle %>%
-  ggplot() +
-  aes(panas_beforetask_mean) +
-  geom_histogram() +
-  theme_minimal()
-
-woman_normcycle %>%
-  ggplot() +
-  aes(panas_beforetask_mean) +
-  geom_histogram() +
-  facet_grid(condition ~ contracept) +
-  labs(title = "Subjective arousal before VS task by contraception status and condition") +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = condition, y = panas_beforetask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = panas_beforetask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = panas_beforetask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = panas_beforetask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-##PANAS aftertask
-woman_normcycle %>%
-  ggplot() +
-  aes(panas_aftertask_mean) +
-  geom_histogram() +
-  theme_minimal()
-
-woman_normcycle %>%
-  ggplot() +
-  aes(panas_aftertask_mean) +
-  geom_histogram() +
-  facet_grid(condition ~ contracept) +
-  labs(title = "Subjective arousal after VS task by contraception status and condition") +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = condition, y = panas_aftertask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = panas_aftertask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = panas_aftertask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = panas_aftertask_mean)) +
-  geom_boxplot() +
-  theme_minimal()
-
-##EDA baseline
-woman_normcycle %>%
-  ggplot() +
-  aes(eda_avg_baseline) +
-  geom_histogram() +
-  theme_minimal()
-
-woman_normcycle %>%
-  ggplot() +
-  aes(eda_avg_baseline) +
-  geom_histogram() +
-  facet_grid(condition ~ contracept) +
-  labs(title = "Baseline EDA by contraception status and condition") +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = eda_avg_baseline)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = eda_avg_baseline)) +
-  geom_boxplot() +
-  theme_minimal()
-
-woman_normcycle |> 
-  ggplot() +
-  aes(x = cycle_phase3, y = eda_avg_baseline) +
-  stat_summary(geom = "pointrange")
-
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = eda_avg_baseline)) +
-  geom_boxplot() +
-  theme_minimal()
-
-woman_normcycle |> 
-  ggplot() +
-  aes(x = cycle_phase5, y = eda_avg_baseline) +
-  stat_summary(geom = "pointrange")
-
-
-## EDA before task
-woman_normcycle %>%
-  ggplot() +
-  aes(eda_avg_before_task) +
-  geom_histogram() +
-  theme_minimal()
-
-woman_normcycle %>%
-  ggplot() +
-  aes(eda_avg_before_task) +
-  geom_histogram() +
-  facet_grid(condition ~ contracept) +
-  labs(title = "EDA before VS task by contraception status and condition") +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = eda_avg_before_task)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = eda_avg_before_task)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = eda_avg_before_task)) +
-  geom_boxplot() +
-  theme_minimal()
-
-##VS baseline accuracy
-woman_normcycle %>%
-  ggplot() +
-  aes(vs_baseline_avg_accuracy) +
-  geom_histogram() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = vs_baseline_avg_accuracy)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = vs_baseline_avg_accuracy)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = vs_baseline_avg_accuracy)) +
-  geom_boxplot() +
-  theme_minimal()
-
-##VS end accuracy
-woman_normcycle %>%
-  ggplot() +
-  aes(vs_end_avg_accuracy) +
-  geom_histogram() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = vs_end_avg_accuracy)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = vs_end_avg_accuracy)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = vs_end_avg_accuracy)) +
-  geom_boxplot() +
-  theme_minimal()
-
-##VS change
-woman_normcycle %>%
-  ggplot() +
-  aes(vs_change) +
-  geom_histogram() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = contracept, y = vs_change)) +
-  geom_boxplot() +
-  theme_minimal()
-
-woman_normcycle %>%
-  ggplot() +
-  aes(vs_change) +
-  geom_histogram() +
-  facet_grid(condition ~ cycle_phase3) +
-  labs(title = "VS accuracy change by cycle phase and condition") +
-  theme_minimal()
-
-woman_normcycle %>%
-  ggplot() +
-  aes(vs_change) +
-  geom_histogram() +
-  facet_grid(condition ~ cycle_phase5) +
-  labs(title = "VS accuracy change by cycle phase and condition") +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase3, y = vs_change)) +
-  geom_boxplot() +
-  theme_minimal()
-
-ggplot(woman_normcycle, aes(x = cycle_phase5, y = vs_change)) +
-  geom_boxplot() +
-  theme_minimal()
-
 
 ```
 
@@ -373,177 +137,257 @@ woman_long <-
                names_sep = "_", 
                values_to = "value") |>
   mutate(time = fct_relevel(time, "baseline", "beforetask", "aftertask", "end"))
+```
+
+## Exploratory data analysis
+
+```{r}
+# Plotting PANAS
+woman_long %>%
+  filter(measure == "panas") %>%
+  ggplot() +
+  aes(x = time, y = value) +
+  stat_summary(geom = "pointrange") +
+  facet_grid(condition ~ contracept) +
+  labs(title = "Change in subjective arousal by contraception status and condition", x = NULL, y = NULL)
+
+woman_long %>%
+  filter(measure == "panas", !is.na(cycle_phase3)) %>%
+  ggplot() +
+  aes(x = time, y = value) +
+  stat_summary(geom = "pointrange") +
+  facet_grid(condition~cycle_phase3) +
+  labs(title = "Change in subjective arousal by condition and the 3 cycle phases", x = NULL, y = NULL)
+
+woman_long %>%
+  filter(measure == "panas", !is.na(cycle_phase5)) %>%
+  ggplot() +
+  aes(x = time, y = value) +
+  stat_summary(geom = "pointrange") +
+  facet_grid(condition~cycle_phase5) +
+  labs(title = "Change in subjective arousal by the 5 cycle phases", x = NULL, y = NULL)
 
 
 
+# Plotting EDA
+woman_long %>%
+  filter(measure == "eda", !is.na(cycle_phase3)) %>%
+  ggplot() +
+  aes(x = time, y = value) +
+  stat_summary(geom = "pointrange") +
+  facet_grid(condition ~ cycle_phase3) +
+  labs(title = "Change in EDA values in the 3 cycle phases, by condition", x = NULL, y = NULL)
+
+woman_long %>%
+  filter(measure == "eda", !is.na(cycle_phase5)) %>%
+  ggplot() +
+  aes(x = time, y = value) +
+  stat_summary(geom = "pointrange") +
+  facet_grid(condition ~ cycle_phase5) +
+  labs(title = "Change in EDA values in the 5 cycle phases, by condition", x = NULL, y = NULL)
+
+
+
+# Plotting VS task
+woman_long %>%
+  filter(measure == "vsaccuracy", !is.na(cycle_phase3)) %>%
+  ggplot() +
+  aes(x = time, y = value) +
+  stat_summary(geom = "pointrange") +
+  facet_grid(condition ~ cycle_phase3) +
+  labs(title = "Change in VS task accuracy in the 3 cycle phases, by condition", x = NULL, y = NULL)
+
+woman_long %>%
+  filter(measure == "vsaccuracy", !is.na(cycle_phase5)) %>%
+  ggplot() +
+  aes(x = time, y = value) +
+  stat_summary(geom = "pointrange") +
+  facet_grid(condition ~ cycle_phase5) +
+  labs(title = "Change in VS task accuracy in the 5 cycle phases, by condition", x = NULL, y = NULL)
+
+woman_normcycle %>%
+  filter(!is.na(cycle_phase3)) %>%
+  ggplot() +
+  aes(x = cycle_phase3, y = vs_change, fill = condition) +
+  geom_boxplot() +
+  geom_jitter() +
+  labs(title = "Change of performance in the visual search task in the 3 cycle phases, by condition", x = NULL, y = NULL)
+
+woman_normcycle %>%
+  filter(!is.na(cycle_phase5)) %>%
+  ggplot() +
+  aes(x = cycle_phase5, y = vs_change, fill = condition) +
+  geom_boxplot() +
+  geom_jitter() +
+  labs(title = "Change of performance in the visual search task in the 5 cycle phases, by condition", x = NULL, y = NULL)
 ```
 
 ## Building the models
 
 ```{r}
-## Models
+## Contrasts
 
-contrasts(woman_long$time) <- contr.helmert(levels(woman_long$time))
+contrasts(woman_long$time) <- contr.sum(levels(woman_long$time))
+contrasts(woman_long$condition) <- contr.sum(levels(woman_long$condition))
+contrasts(woman_long$cycle_phase3) <- contr.sum(levels(woman_long$cycle_phase3))
+contrasts(woman_long$cycle_phase5) <- contr.sum(levels(woman_long$cycle_phase5))
 
-model1 <-
+## Subjective arousal models
+
+model_panas_1 <-
   woman_long |> 
   filter(measure == "panas") |> 
-  lmer(value ~ condition  * time * contracept + 
-         # caffeine_perday + 
+  lmer(value ~ condition * contracept * time +
+         caffeine_perday + mf_baseline_mean + 
          (1 | PARTICIPANT_ID),
        data = _)
+summary(model_panas_1)
+confint(model_panas_1)
+check_collinearity(model_panas_1)
+check_model(model_panas_1)
+model_performance(model_panas_1)
 
-summary(model1)
+model_panas_2 <-
+  woman_long |>
+  filter(measure == "panas") |>
+  lmer(value ~ condition * contracept * cycle_phase3 * time + caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID), 
+       data = _)
+summary(model_panas_2)
+confint(model_panas_2)
+check_collinearity(model_panas_2)
+check_model(model_panas_2)
+model_performance(model_panas_2)
 
-check_collinearity(model1)
+model_panas_3 <-
+  woman_long |>
+  filter(measure == "panas") |>
+  lmer(value ~ condition * contracept + cycle_phase5 + 
+         time + caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID), 
+       data = _)
+summary(model_panas_3)
+confint(model_panas_3)
+check_collinearity(model_panas_3)
+check_model(model_panas_3)
+emmeans(model_panas_3, pairwise ~ condition * contracept * cycle_phase5)
+model_performance(model_panas_3)
 
-confint(model1, oldNames = FALSE)
-random_variance <- 101.0 / (101.0 + 255.8) #Random effects account for 28% of the total variance
-check_model(model1) #Normality of residuals and random effects are okay, no multicollinearity, homogeneity of variance is problematic
-check_outliers(model1) #No outliers
-check_heteroscedasticity(model1) #There is heteroscedasticity
-robust_model1 <- rlmer(value ~ condition * contracept + measure + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = general_long)
-summary(robust_model1)
-check_model(robust_model1) #No more heteroscedasticity, normality is a bit off
-plot(robust_model1)
-model_performance(robust_model1)
+## Physiological arousal models
 
+model_eda_1 <-
+  woman_long |>
+  filter(measure == "eda") |>
+  lmer(value ~ condition * contracept *
+         time + caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_eda_1)
+confint(model_eda_1)
+check_collinearity(model_eda_1)
+check_model(model_eda_1)
+model_performance(model_eda_1)
 
-model2 <- lmer(value ~ cycle_phase_3 * contracept * condition + measure + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = cm_3_long)
-summary(model2)
-confint(model2, oldNames = FALSE)
-check_model(model2)
-check_collinearity(model2)
-check_heteroscedasticity(model2) #There's heteroskedasticity
+model_eda_2 <-
+  woman_long |>
+  filter(measure == "eda") |>
+  lmer(value ~ condition * contracept * cycle_phase3 +
+         time + caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_eda_2)
+confint(model_eda_2)
+check_collinearity(model_eda_2)
+check_model(model_eda_2)
+model_performance(model_eda_2)
 
-robust_model2 <- rlmer(value ~ cycle_phase_3 * contracept * condition + measure + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = cm_3_long)
-summary(robust_model2)
-check_model(robust_model2)
-model_performance(robust_model2)
+model_eda_3 <-
+  woman_long |>
+  filter(measure == "eda") |>
+  lmer(value ~ condition * contracept * cycle_phase5 +
+         time + caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_eda_3)
+confint(model_eda_3)
+check_collinearity(model_eda_3)
+check_model(model_eda_3)
+model_performance(model_eda_3)
 
+## Visual search task models
 
-model3 <- lmer(value ~ cycle_phase_5 * condition * contracept + measure + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = cm_5_long)
-summary(model3)
-check_model(model3)
-vif(model3) #Multicollinearity between cycle_phase_5 and interaction terms
-check_outliers(model3) #No outliers
-check_heteroscedasticity(model3) #There is heteroscedasticity
+model_vs_1 <-
+  woman_long |>
+  filter(measure == "vsaccuracy") |>
+  lmer(value ~ condition * contracept *
+         time + caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_vs_1)
+confint(model_vs_1)
+check_collinearity(model_vs_1)
+check_model(model_vs_1)
+model_performance(model_vs_1)
 
-robust_model3 <- rlmer(value ~ cycle_phase_5 * condition * contracept + measure + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = cm_5_long)
-summary(robust_model3)
-check_model(robust_model3) #There is still multicollinearity
+model_vs_2 <-
+  woman_long |>
+  filter(measure == "vsaccuracy") |>
+  lmer(value ~ condition * contracept * cycle_phase3 +
+         time + caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_vs_2)
+confint(model_vs_2)
+check_collinearity(model_vs_2)
+check_model(model_vs_2)
+model_performance(model_vs_2)
 
-model4 <- lm(vs_change ~ condition * contracept * cycle_phase_3 + caffeine_perday + mf_baseline, data = cycle_model_3)
-summary(model4)
-plot(model4)
-model_performance(model4)
+model_vs_3 <-
+  woman_long |>
+  filter(measure == "vsaccuracy") |>
+  lmer(value ~ condition * contracept * cycle_phase5 +
+         time + caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_vs_3)
+confint(model_vs_3)
+check_collinearity(model_vs_3)
+check_model(model_vs_3)
+model_performance(model_vs_3)
 
-model5 <- lm(vs_change ~ condition * contracept * cycle_phase_5 + caffeine_perday + mf_baseline, data = cycle_model_5)
-summary(model5)
-plot(model5)
+model_vschange_1 <-
+  woman_long |>
+  lm(vs_change ~ condition * contracept +
+        caffeine_perday + mf_baseline_mean,
+      data = _)
+summary(model_vschange_1)
+confint(model_vschange_1)
+check_collinearity(model_vschange_1)
+check_model(model_vschange_1)
+model_performance(model_vschange_1)
 
-##Separate models for each outcome variable
+model_vschange_2 <-
+  woman_long |>
+  lm(vs_change ~ condition * contracept * cycle_phase3 +
+        caffeine_perday + mf_baseline_mean,
+      data = _)
+summary(model_vschange_2)
+confint(model_vschange_2)
+check_collinearity(model_vschange_2)
+check_model(model_vschange_2)
+model_performance(model_vschange_2)
 
-model_general_arousal <- lmer(value ~ condition * contracept + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(general_long, measure = "panas"))
-summary(model_general_arousal)
-confint(model_general_arousal, oldNames = FALSE)
-check_model(model_general_arousal) #Linearity, homogeneity of variance, collinearity and normality are okay; there are a few influential observations
-check_outliers(model_general_arousal) #No outliers
-check_heteroscedasticity(model_general_arousal) #There is heteroskedasticity
-model_performance(model_general_arousal)
-
-robust_model_gen_arousal <- rlmer(value ~ condition * contracept + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(general_long, measure = "panas"))
-summary(robust_model_gen_arousal)
-check_model(robust_model_gen_arousal)
-check_heteroscedasticity(robust_model_gen_arousal)
-check_normality(robust_model_gen_arousal)
-model_performance(model_general_arousal)
-
-model_general_eda <- lmer(value ~ condition * contracept + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(general_long, measure = "eda"))
-summary(model_general_eda)
-confint(model_general_eda, oldNames = FALSE)
-check_model(model_general_eda) #Linearity, homogeneity of variance, collinearity and normality are okay; there are a few influential observations
-check_outliers(model_general_eda) #No outliers
-check_heteroscedasticity(model_general_eda) #There is heteroscedasticity
-
-robust_model_gen_eda <- rlmer(value ~ condition * contracept + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(general_long, measure = "eda"))
-summary(robust_model_gen_eda)
-check_model(robust_model_gen_eda)
-model_performance(robust_model_gen_eda)
-
-model_general_vs <- lmer(value ~ condition * contracept + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(general_long, measure = "vs"))
-summary(model_general_vs)
-confint(model_general_vs, oldNames = FALSE)
-check_model(model_general_vs) #Linearity, homogeneity of variance, collinearity and normality are okay; there are a few influential observations
-check_outliers(model_general_vs) #No outliers detected
-check_heteroscedasticity(model_general_vs) #There is heteroscedasticity
-
-robust_model_gen_vs <- rlmer(value ~ condition * contracept + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(general_long, measure = "vs"))
-summary(robust_model_gen_vs)
-check_model(robust_model_gen_vs) #Normality and linearity are weird
-model_performance(robust_model_gen_vs)
-
-
-
-model_cm3_arousal <- lmer(value ~ condition * contracept * cycle_phase_3 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_3_long, measure = "panas"))
-summary(model_cm3_arousal)
-check_model(model_cm3_arousal) #Homogeinity of variance seems to have issues
-vif(model_cm3_arousal) #No multicollinearity
-check_outliers(model_cm3_arousal) #No outliers
-check_heteroscedasticity(model_cm3_arousal) #There is heteroscedasticity
-
-robust_cm3_arousal <- rlmer(value ~ condition * contracept * cycle_phase_3 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_3_long, measure = "panas"))
-summary(robust_cm3_arousal)
-check_model(robust_cm3_arousal) #Linearity and normality are weird
-model_performance(robust_cm3_arousal)
-
-model_cm3_eda <- lmer(value ~ condition * contracept * cycle_phase_3 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_3_long, measure = "eda"))
-summary(model_cm3_eda)
-check_model(model_cm3_eda) #In linearity and homogeneity of variance there seems to be some grouping going on, normality is okay, there is multicollinearity between cycle_phase_3, contracept and the interaction terms and quite a few influential observations 
-vif(model_cm3_eda) #Collinearity fixed
-check_outliers(model_cm3_eda) #No outliers
-check_heteroscedasticity(model_cm3_eda) #There is heteroscedasticity
-
-robust_cm3_eda <- rlmer(value ~ condition * contracept * cycle_phase_3 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_3_long, measure = "eda"))
-summary(robust_cm3_eda)
-check_model(robust_cm3_eda) #Same as before, weird grouping in linearity plot and normality
-model_performance(robust_cm3_eda)
-
-model_cm3_vs <- lmer(value ~ condition * contracept * cycle_phase_3 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_3_long, measure = "vs"))
-summary(model_cm3_vs)
-check_model(model_cm3_vs) #In linearity and homogeneity of variance there seems to be some grouping going on, normality is okay, there is multicollinearity between cycle_phase_3, contracept and the interaction terms and quite a few influential observations
-vif(model_cm3_vs) #Collinearity fixed
-check_outliers(model_cm3_vs) #No outliers
-check_heteroscedasticity(model_cm3_vs) #There is heteroscedasticity
-
-robust_cm3_vs <- rlmer(value ~ condition * contracept * cycle_phase_3 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_3_long, measure = "vs"))
-summary(robust_cm3_vs)
-check_model(robust_cm3_vs) #Linearity and normality seem weird
-model_performance(robust_cm3_vs)
-
-model_cm5_arousal <- lmer(value ~ condition * contracept * cycle_phase_5 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_5_long, measure = "panas"))
-summary(model_cm5_arousal)
-check_model(model_cm5_arousal) #Linearity and homogeneity of variance are kind of okay, normality is fine, there are quite a few influential observations and a lot of multicollinearity between condition, contracept, cycle_phase_5 and interaction terms
-performance::check_collinearity(model_cm5_arousal)
-check_outliers(model_cm5_arousal) #No outliers
-check_heteroscedasticity(model_cm5_arousal) #There is heteroscedasticity
-
-model_cm5_eda <- lmer(value ~ condition * contracept * cycle_phase_5 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_5_long, measure = "eda"))
-summary(model_cm5_eda)
-check_model(model_cm5_eda) #Linearity and homogeneity of variance are kind of okay, normality is fine, there are quite a few influential observations and a lot of multicollinearity between condition, contracept, cycle_phase_5 and interaction terms
-check_outliers(model_cm5_eda) #No outliers
-check_heteroscedasticity(model_cm5_eda) #There is heteroscedasticity
-
-model_cm5_vs <- lmer(value ~ condition * contracept * cycle_phase_5 + time + caffeine_perday + mf_baseline + (1 | PARTICIPANT_ID), data = subset(cm_5_long, measure = "vs"))
-summary(model_cm5_vs)
-check_model(model_cm5_vs) #Linearity and homogeneity of variance are kind of okay, normality is fine, there are quite a few influential observations and a lot of multicollinearity between condition, contracept, cycle_phase_5 and interaction terms
-check_outliers(model_cm5_vs) #No outliers
-check_heteroscedasticity(model_cm5_vs) #There is heteroscedasticity
-
-##Generalized Additive Mixed Model for models using the 5 cycle phases
-cm5_gamm_arousal <- gamm4(value ~ s(condition) + s(contracept) + s(cycle_phase_5) + s(time) + s(caffeine_perday) + s(mf_baseline), random = ~(1 | PARTICIPANT_ID), data = subset(cm_5_long, measure = "panas"))
-
-glimpse(cm_5_long)
+model_vschange_3 <-
+  woman_long |>
+  lm(vs_change ~ condition * contracept * cycle_phase5 +
+        caffeine_perday + mf_baseline_mean,
+      data = _)
+summary(model_vschange_3)
+confint(model_vschange_3)
+check_collinearity(model_vschange_3)
+check_model(model_vschange_3)
+model_performance(model_vschange_3)
+  
 ```
 
 
