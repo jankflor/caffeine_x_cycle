@@ -41,7 +41,7 @@ theme_set(theme_minimal())
 ## Loading df
 
 ```{r}
-media_blind <- read_csv("media_blind_final.csv")
+media_blind <- read_csv("media_blind.csv")
 
 view(media_blind)
 glimpse(media_blind)
@@ -51,10 +51,10 @@ glimpse(media_blind)
 ## Data tidying
 
 ```{r}
-#Finding missing values in condition
+# No missing values in condition
 skim(media_blind$condition)
 
-#No values between 10 and 20, values below 20 need to be replaced in the relevant group
+# No values between 10 and 20, values below 20 need to be replaced in the relevant group
 skim(media_blind$cycle_length)
 
 media_blind %>%
@@ -62,8 +62,25 @@ media_blind %>%
   aes(cycle_length) +
   geom_histogram()
 
-#No duplicates
+# No duplicates
 sum(duplicated(media_blind$PARTICIPANT_ID))
+
+# Counting participants
+media_blind %>%
+  filter(gender == "Female", cycle_regular == "Yes") %>%
+  count()
+
+media_blind %>%
+  filter(gender == "Female", cycle_regular == "Yes", contracept == "No") %>%
+  count()
+
+media_blind %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(cycle_day)) %>%
+  count()
+
+media_blind %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(cycle_day), contracept == "No") %>%
+  count()
 ```
 
 
