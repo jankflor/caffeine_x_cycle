@@ -51,8 +51,11 @@ glimpse(media_blind)
 ## Data tidying
 
 ```{r}
-# No missing values in condition
+# No missing values in condition, 1 missing value in contracept
 skim(media_blind$condition)
+media_blind %>%
+  filter(gender == "Female") %>%
+  skim(contracept)
 
 # No values between 10 and 20, values below 20 need to be replaced in the relevant group
 skim(media_blind$cycle_length)
@@ -67,11 +70,15 @@ sum(duplicated(media_blind$PARTICIPANT_ID))
 
 # Counting participants
 media_blind %>%
-  filter(gender == "Female", cycle_regular == "Yes") %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept), !is.na(cycle_day)) %>%
   count()
 
 media_blind %>%
-  filter(gender == "Female", cycle_regular == "Yes", contracept == "No") %>%
+  filter(gender == "Female", cycle_regular == "Yes", contracept == "No", !is.na(cycle_day)) %>%
+  count()
+
+media_blind %>%
+  filter(gender == "Female", cycle_regular == "Yes", contracept == "Yes", !is.na(cycle_day)) %>%
   count()
 
 media_blind %>%
@@ -267,7 +274,8 @@ model_panas_2 <-
   woman_long |>
   filter(measure == "panas") |>
   lmer(value ~ condition * contracept * cycle_phase3 +
-         condition * time * cycle_phase3 +
+         condition * time +
+         cycle_phase3 * time +
          caffeine_perday + mf_baseline_mean + 
          (1 | PARTICIPANT_ID), 
        data = _)
@@ -280,8 +288,10 @@ model_performance(model_panas_2)
 model_panas_3 <-
   woman_long |>
   filter(measure == "panas") |>
-  lmer(value ~ condition * contracept * cycle_phase5 +
-         condition * time * cycle_phase5 +
+  lmer(value ~ condition * contracept +
+         condition * cycle_phase5 +
+         condition * time +
+         contracept * cycle_phase5 +
          caffeine_perday + mf_baseline_mean + 
          (1 | PARTICIPANT_ID), 
        data = _)
@@ -312,7 +322,8 @@ model_eda_2 <-
   woman_long |>
   filter(measure == "eda") |>
   lmer(value ~ condition * contracept * cycle_phase3 +
-         condition * time * cycle_phase3 +
+         condition * time +
+         cycle_phase3 * time +
          caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
@@ -322,12 +333,12 @@ check_collinearity(model_eda_2)
 check_model(model_eda_2)
 model_performance(model_eda_2)
 
+
 model_eda_3 <-
   woman_long |>
   filter(measure == "eda") |>
-  lmer(value ~ condition * cycle_phase5 * contracept +
-         condition * time +
-         cycle_phase5 * time +
+  lmer(value ~ condition * contracept * time + 
+         condition * cycle_phase5 +
          caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
@@ -342,8 +353,8 @@ model_performance(model_eda_3)
 model_vs_1 <-
   woman_long |>
   filter(measure == "vsaccuracy") |>
-  lmer(value ~ condition * contracept *
-         time + caffeine_perday + mf_baseline_mean +
+  lmer(value ~ condition * contracept * time +
+         caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_vs_1)
@@ -356,7 +367,9 @@ model_vs_2 <-
   woman_long |>
   filter(measure == "vsaccuracy") |>
   lmer(value ~ condition * contracept * cycle_phase3 +
-         time + caffeine_perday + mf_baseline_mean +
+         condition * time +
+         time * cycle_phase3 +
+         caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_vs_2)
@@ -368,8 +381,9 @@ model_performance(model_vs_2)
 model_vs_3 <-
   woman_long |>
   filter(measure == "vsaccuracy") |>
-  lmer(value ~ condition * contracept * cycle_phase5 +
-         time + caffeine_perday + mf_baseline_mean +
+  lmer(value ~ condition * contracept * time +
+         condition * cycle_phase5 +
+         caffeine_perday + mf_baseline_mean +
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_vs_3)
@@ -402,7 +416,9 @@ model_performance(model_vschange_2)
 
 model_vschange_3 <-
   woman_long |>
-  lm(vs_change ~ condition * contracept * cycle_phase5 +
+  lm(vs_change ~ condition * contracept +
+       condition * cycle_phase5 +
+       contracept * cycle_phase5 +
         caffeine_perday + mf_baseline_mean,
       data = _)
 summary(model_vschange_3)
