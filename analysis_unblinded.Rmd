@@ -26,8 +26,6 @@ library(performance)
 library(car)
 library(sandwich)
 library(lmtest)
-library(robustlmm)
-library(gamm4)
 library(skimr)
 library(emmeans)
 library(broom.mixed)
@@ -192,9 +190,12 @@ woman_long <-
 ## Exploratory data analysis
 
 ```{r}
-# EDA AUC
-woman_long %>%
-  filter(measure )
+# Descriptives
+woman_normcycle %>%
+  group_by(condition, contracept) %>%
+  skim(panas_baseline_mean, panas_beforetask_mean, panas_aftertask_mean, eda_avg_baseline, eda_avg_before_task, eda_auc_baseline, eda_auc_before_task, caffeine_perday, mf_baseline_mean)
+
+table(woman_normcycle$condition, woman_normcycle$contracept, woman_normcycle$cycle_phase3)
 
 # Plotting PANAS
 woman_long %>%
@@ -272,10 +273,6 @@ woman_long %>%
   facet_grid(condition ~ cycle_phase5) +
   labs(title = "Change in EDA values in the 5 cycle phases, by condition", x = NULL, y = NULL)
 
-# Plotting EDA AUC
-
-
-
 # Plotting VS task
 woman_long %>%
   filter(measure == "vsaccuracy") %>%
@@ -335,84 +332,6 @@ contrasts(woman_long$condition)
 contrasts(woman_long$cycle_phase3)
 contrasts(woman_long$cycle_phase5)
 
-## EDA AUC model
-model_auc_1 <-
-  woman_long %>%
-  filter(measure == "edaauc") |>
-  lmer(value ~ condition * contracept * time +
-         caffeine_perday + mf_baseline_mean +
-         (1 | PARTICIPANT_ID),
-       data = _)
-summary(model_auc_1)
-model_performance(model_auc_1)
-check_model(model_auc_1)
-fixed_effects_auc1 <- broom.mixed::tidy(model_auc_1, effects = "fixed", conf.int = TRUE)
-ggplot(fixed_effects_auc1, aes(x = term, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-  coord_flip() +
-  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
-       x = NULL,
-       y = NULL) +
-  theme_minimal()
-
-interaction_preds_auc <- ggpredict(model_auc_1, terms = c("condition", "contracept"))
-plot(interaction_preds_auc) +
-  labs(title = "A kísérleti feltétel és a fogamzásgátlás használatának interakciója",
-       x = NULL,
-       y = "Fiziológiai arousal AUC",
-       color = "Fogamzásgátlás használata") +
-  scale_color_discrete(labels = c("nem használ", "használ"))
-
-model_auc_2 <-
-  woman_long %>%
-  filter(measure == "edaauc") |>
-  lmer(value ~ condition * contracept * time +
-         condition * contracept * cycle_phase3 +
-         caffeine_perday + mf_baseline_mean +
-         (1 | PARTICIPANT_ID),
-       data = _)
-summary(model_auc_2)
-model_performance(model_auc_2)
-check_model(model_auc_2)
-check_collinearity(model_auc_2)
-
-fixed_effects_auc2 <- broom.mixed::tidy(model_auc_2, effects = "fixed", conf.int = TRUE)
-ggplot(fixed_effects_auc2, aes(x = term, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-  coord_flip() +
-  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
-       x = NULL,
-       y = NULL) +
-  theme_minimal()
-
-
-fixed_effects_1 <- broom.mixed::tidy(model_panas_1, effects = "fixed", conf.int = TRUE)
-ggplot(fixed_effects_1, aes(x = term, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-  coord_flip() +
-  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
-       x = NULL,
-       y = NULL) +
-  theme_minimal()
-
-interaction_preds_2 <- ggpredict(model_panas_1, terms = c("condition", "time"))
-
-predictions2 <- interaction_preds_2 %>%
-  mutate(
-    x = recode(x, 
-               "condition" = "Feltétel",
-               "time" = "Mérési pont")
-  )
-
-plot(interaction_preds_2) +
-  labs(title = "A kísérleti feltétel és a mérési időpont interakciója",
-       x = NULL,
-       y = "Becsült szubjektív arousal",
-       fill = "Mérési pont")
-
 
 ## Subjective arousal models
 model_panas_1 <-
@@ -430,39 +349,7 @@ model_performance(model_panas_1)
 emmeans(model_panas_1, pairwise ~ condition * time)
 emmeans(model_panas_1, pairwise ~ time)
 
-coefficients <- fixef(model_panas_1)
-woman_long %>%
-  filter(measure == "panas") %>%
-  summarize(sdvalue = sd(value))
 
-fixed_effects_1 <- broom.mixed::tidy(model_panas_1, effects = "fixed", conf.int = TRUE)
-ggplot(fixed_effects_1, aes(x = term, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-  coord_flip() +
-  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
-       x = NULL,
-       y = NULL) +
-  theme_minimal()
-
-interaction_preds_2 <- ggpredict(model_panas_1, terms = c("condition", "time"))
-
-predictions2 <- interaction_preds_2 %>%
-  mutate(
-    x = recode(x, 
-               "condition" = "Feltétel",
-               "time" = "Mérési pont")
-  )
-
-plot(interaction_preds_2) +
-  labs(title = "A kísérleti feltétel és a mérési időpont interakciója",
-       x = NULL,
-       y = "Becsült szubjektív arousal",
-       fill = "Mérési pont")
-
-ranef_model <- ranef(model_panas_1, condVar = TRUE)
-dotplot(ranef_model, scales = list(y = list(relation = "free")),
-        main = "Caterpillar Plot of Random Effects")
 
 model_panas_2 <-
   woman_long |>
@@ -478,18 +365,9 @@ confint(model_panas_2)
 check_collinearity(model_panas_2)
 check_model(model_panas_2)
 model_performance(model_panas_2)
-
-fixed_effects_2 <- broom.mixed::tidy(model_panas_2, effects = "fixed", conf.int = TRUE)
-ggplot(fixed_effects_2, aes(x = term, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-  coord_flip() +
-  labs(title = "Főhatások, 95%-os konfidencia intervallumokkal",
-       x = NULL,
-       y = NULL) +
-  theme_minimal()
-
 anova(model_panas_1, model_panas_2)
+
+
 
 model_panas_3 <-
   woman_long |>
@@ -525,14 +403,6 @@ check_model(model_eda_1)
 model_performance(model_eda_1)
 
 
-fixed_effects_3 <- broom.mixed::tidy(model_eda_1, effects = "fixed", conf.int = TRUE)
-ggplot(fixed_effects_3, aes(x = term, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-  coord_flip() +  # Flip for better readability
-  labs(title = "Főhatások, 95%-os konfidencia intervallumokkal",
-       x = NULL,
-       y = NULL)
 
 model_eda_2 <-
   woman_long |>
@@ -549,14 +419,6 @@ check_collinearity(model_eda_2)
 check_model(model_eda_2)
 model_performance(model_eda_2)
 
-fixed_effects_4 <- broom.mixed::tidy(model_eda_2, effects = "fixed", conf.int = TRUE)
-ggplot(fixed_effects_4, aes(x = term, y = estimate)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
-  coord_flip() +  # Flip for better readability
-  labs(title = "Főhatások, 95%-os konfidencia intervallumokkal",
-       x = NULL,
-       y = NULL)
 
 
 model_eda_3 <-
@@ -572,6 +434,34 @@ confint(model_eda_3)
 check_collinearity(model_eda_3)
 check_model(model_eda_3)
 model_performance(model_eda_3)
+
+## EDA AUC model
+model_auc_1 <-
+  woman_long %>%
+  filter(measure == "edaauc") |>
+  lmer(value ~ condition * contracept * time +
+         caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_auc_1)
+model_performance(model_auc_1)
+check_model(model_auc_1)
+
+
+model_auc_2 <-
+  woman_long %>%
+  filter(measure == "edaauc") |>
+  lmer(value ~ condition * contracept * time +
+         condition * contracept * cycle_phase3 +
+         caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_auc_2)
+model_performance(model_auc_2)
+check_model(model_auc_2)
+check_collinearity(model_auc_2)
+
+
 
 ## Visual search task models
 
@@ -698,4 +588,104 @@ check_model(model_vschange_3)
 model_performance(model_vschange_3)
   
 ```
+
+## Visualizing models
+
+```{r}
+# PANAS models
+coefficients <- fixef(model_panas_1)
+woman_long %>%
+  filter(measure == "panas") %>%
+  summarize(sdvalue = sd(value))
+
+fixed_effects_1 <- broom.mixed::tidy(model_panas_1, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_1, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+
+interaction_preds_2 <- ggpredict(model_panas_1, terms = c("condition", "time"))
+
+predictions2 <- interaction_preds_2 %>%
+  mutate(
+    x = recode(x, 
+               "condition" = "Feltétel",
+               "time" = "Mérési pont")
+  )
+
+plot(interaction_preds_2) +
+  labs(title = "A kísérleti feltétel és a mérési időpont interakciója",
+       x = NULL,
+       y = "Becsült szubjektív arousal",
+       fill = "Mérési pont")
+
+ranef_model <- ranef(model_panas_1, condVar = TRUE)
+dotplot(ranef_model, scales = list(y = list(relation = "free")),
+        main = "Caterpillar Plot of Random Effects")
+
+fixed_effects_2 <- broom.mixed::tidy(model_panas_2, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_2, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallumokkal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+
+## EDA models
+
+
+fixed_effects_3 <- broom.mixed::tidy(model_eda_1, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_3, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +  # Flip for better readability
+  labs(title = "Főhatások, 95%-os konfidencia intervallumokkal",
+       x = NULL,
+       y = NULL)
+
+fixed_effects_4 <- broom.mixed::tidy(model_eda_2, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_4, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +  # Flip for better readability
+  labs(title = "Főhatások, 95%-os konfidencia intervallumokkal",
+       x = NULL,
+       y = NULL)
+
+fixed_effects_auc1 <- broom.mixed::tidy(model_auc_1, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_auc1, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+
+interaction_preds_auc <- ggpredict(model_auc_1, terms = c("condition", "contracept"))
+plot(interaction_preds_auc) +
+  labs(title = "A kísérleti feltétel és a fogamzásgátlás használatának interakciója",
+       x = NULL,
+       y = "Fiziológiai arousal AUC",
+       color = "Fogamzásgátlás használata") +
+  scale_color_discrete(labels = c("nem használ", "használ"))
+
+fixed_effects_auc2 <- broom.mixed::tidy(model_auc_2, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_auc2, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+```
+
+
 
