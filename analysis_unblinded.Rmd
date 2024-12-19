@@ -15,6 +15,7 @@ remove.packages("insight")
 install.packages("insight")
 install.packages('ggeffects', dependencies = TRUE)
 install.packages("jtools")
+install.packages("sjPlot")
 
 ```
 
@@ -32,6 +33,7 @@ library(broom.mixed)
 library(ggeffects)
 library(jtools)
 library(lattice)
+library(sjPlot)
 
 theme_set(theme_minimal())
 
@@ -55,6 +57,12 @@ skim(media_real$condition)
 media_real %>%
   filter(gender == "Female") %>%
   skim(contracept)
+
+# Outlier in weight
+
+z_scores <- (media_real$weight - mean(media_real$weight)) / sd(media_real$weight)
+outliers <- media_real$weight[abs(z_scores) > 3]
+print(outliers)
 
 # No values between 10 and 20, values below 20 need to be replaced in the relevant group
 skim(media_real$cycle_length)
@@ -197,6 +205,21 @@ woman_normcycle %>%
 
 table(woman_normcycle$condition, woman_normcycle$contracept, woman_normcycle$cycle_phase3)
 
+table(woman_normcycle$caffeine_perday)
+
+woman_normcycle %>%
+  group_by(condition) %>%
+  skim(age, weight, contracept, cycle_length, cycle_phase3)
+
+woman_normcycle %>%
+  group_by(condition) %>%
+  summarize(agemin = min(age),
+            agemax = max(age),
+            weightmin = min(weight),
+            weightmax = max(weight),
+            cyclemin = min(cycle_length),
+            cyclemax = max(cycle_length))
+
 # Plotting PANAS
 woman_long %>%
   filter(measure == "panas") %>%
@@ -243,6 +266,14 @@ woman_normcycle %>%
   ggplot() +
   aes(x = eda_avg_baseline) +
   geom_bar()
+
+woman_normcycle %>%
+  filter(!is.na(eda_avg_baseline), !is.na(eda_avg_before_task), !is.na(eda_auc_baseline), !is.na(eda_auc_before_task)) %>%
+  group_by(condition) %>%
+  summarize(mean_eda_avg_baseline = mean(eda_avg_baseline),
+            mean_eda_avg_beforetask = mean(eda_avg_before_task),
+            mean_eda_auc_baseline = mean(eda_auc_baseline),
+            mean_eda_auc_beforetask = mean(eda_auc_before_task))
 
 woman_long %>%
   filter(measure == "eda") %>%
@@ -342,6 +373,7 @@ model_panas_1 <-
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_panas_1)
+tab_model(model_panas_1, show.std = TRUE, show.se = TRUE)
 confint(model_panas_1)
 check_collinearity(model_panas_1)
 check_model(model_panas_1)
@@ -361,6 +393,7 @@ model_panas_2 <-
          (1 | PARTICIPANT_ID), 
        data = _)
 summary(model_panas_2)
+tab_model(model_panas_2, show.std = TRUE, show.se = TRUE)
 confint(model_panas_2)
 check_collinearity(model_panas_2)
 check_model(model_panas_2)
@@ -397,10 +430,12 @@ model_eda_1 <-
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_eda_1)
+tab_model(model_eda_1, show.std = TRUE, show.se = TRUE)
 confint(model_eda_1)
 check_collinearity(model_eda_1)
 check_model(model_eda_1)
 model_performance(model_eda_1)
+emmeans(model_eda_1, pairwise ~ time)
 
 
 
@@ -414,6 +449,7 @@ model_eda_2 <-
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_eda_2)
+tab_model(model_eda_2, show.std = TRUE, show.se = TRUE)
 confint(model_eda_2)
 check_collinearity(model_eda_2)
 check_model(model_eda_2)
@@ -444,6 +480,7 @@ model_auc_1 <-
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_auc_1)
+tab_model(model_auc_1, show.std = TRUE, show.se = TRUE)
 model_performance(model_auc_1)
 check_model(model_auc_1)
 
@@ -457,6 +494,7 @@ model_auc_2 <-
          (1 | PARTICIPANT_ID),
        data = _)
 summary(model_auc_2)
+tab_model(model_auc_2, show.std = TRUE, show.se = TRUE)
 model_performance(model_auc_2)
 check_model(model_auc_2)
 check_collinearity(model_auc_2)
