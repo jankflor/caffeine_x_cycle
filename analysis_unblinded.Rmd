@@ -58,11 +58,12 @@ media_real %>%
   filter(gender == "Female") %>%
   skim(contracept)
 
-# Outlier in weight
+# Typo in weight
 
 z_scores <- (media_real$weight - mean(media_real$weight)) / sd(media_real$weight)
 outliers <- media_real$weight[abs(z_scores) > 3]
 print(outliers)
+
 
 # No values between 10 and 20, values below 20 need to be replaced in the relevant group
 skim(media_real$cycle_length)
@@ -134,6 +135,8 @@ woman_normcycle <-
          condition = fct_relevel(condition, "placebo"),
          contracept = fct_relevel(contracept, "No"),
          caffeine_perday = fct_relevel(caffeine_perday, c("I don't consume caffeine", "25-55 mg/day", "75-80 mg/day", "80-100 mg/day", "100-130 mg/day", "130-160 mg/day", "160-240 mg/day", "240-320 mg/day", "320-400 mg/day")),
+         # Correcting typo in weight
+         weight = ifelse(weight == 565, 56.5, weight),
          # Calculating scales
          panas_baseline_mean = (panas_baseline_3 + panas_baseline_9)/2,
          panas_beforetask_mean = (panas_beforetask_3 + panas_beforetask_9)/2,
