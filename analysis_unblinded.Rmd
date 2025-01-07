@@ -663,6 +663,11 @@ tab_model(model_auc_1, show.std = TRUE, show.se = TRUE)
 model_performance(model_auc_1)
 check_model(model_auc_1)
 
+model_ranova_auc <- woman_long %>%
+  filter(measure == "edaauc") |>
+  aov(value ~ condition * time * contracept + Error(PARTICIPANT_ID / (condition * time)), data = _)
+summary(model_ranova_auc)
+
 
 model_auc_2 <-
   woman_long %>%
