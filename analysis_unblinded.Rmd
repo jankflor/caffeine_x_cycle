@@ -223,6 +223,34 @@ woman_normcycle %>%
             cyclemin = min(cycle_length),
             cyclemax = max(cycle_length))
 
+# Manipulation check
+
+manipulation_check_sa <- woman_long %>%
+  filter(measure == "panas") %>%
+  group_by(condition, time) %>%
+  summarize(
+    Subjective_Mean = mean(value, na.rm = TRUE),
+    Subjective_SD = sd(value, na.rm = TRUE))
+print(manipulation_check_sa)
+
+woman_long %>%
+  filter(measure == "panas") %>%
+    ggplot(aes(x = time, y = value, color = factor(condition))) +
+    geom_line(stat = "summary", fun = mean) +
+    geom_point(stat = "summary", fun = mean) +
+    labs(title = "Subjective Arousal Over Time",
+       x = "Time",
+       y = "Subjective Arousal",
+       color = "Condition")
+
+manipulation_check_pa <- woman_long %>%
+  filter(measure == "edaauc") %>%
+  group_by(condition, time) %>%
+  summarize(
+    Physio_Mean = mean(value, na.rm = TRUE),
+    Physio_SD = sd(value, na.rm = TRUE))
+print(manipulation_check_pa)
+
 # Plotting PANAS
 woman_long %>%
   filter(measure == "panas") %>%
@@ -366,6 +394,27 @@ contrasts(woman_long$condition)
 contrasts(woman_long$cycle_phase3)
 contrasts(woman_long$cycle_phase5)
 
+## Manipulation check
+
+man_check_sa <-
+  woman_long |> 
+  filter(measure == "panas") |> 
+  lmer(value ~ condition * time +
+         caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(man_check_sa)
+emmeans(man_check_sa, pairwise ~ condition * time)
+
+man_check_pa <-
+  woman_long |> 
+  filter(measure == "edaauc") |> 
+  lmer(value ~ condition * time +
+         caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(man_check_pa)
+emmeans(man_check_pa, pairwise ~ condition * time)
 
 ## Subjective arousal models
 model_panas_1 <-
