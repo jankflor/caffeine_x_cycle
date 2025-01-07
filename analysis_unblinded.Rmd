@@ -233,15 +233,29 @@ manipulation_check_sa <- woman_long %>%
     Subjective_SD = sd(value, na.rm = TRUE))
 print(manipulation_check_sa)
 
-woman_long %>%
+summary_mancheck_sa <- woman_long %>%
   filter(measure == "panas") %>%
-    ggplot(aes(x = time, y = value, color = factor(condition))) +
-    geom_line(stat = "summary", fun = mean) +
-    geom_point(stat = "summary", fun = mean) +
-    labs(title = "Subjective Arousal Over Time",
-       x = "Time",
-       y = "Subjective Arousal",
-       color = "Condition")
+  group_by(time, condition) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+ggplot(summary_mancheck_sa, aes(x = time, y = mean_value, group = condition)) +
+  geom_line(aes(color = condition), size = 1) +
+  geom_point(aes(color = condition), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "baseline", "beforetask" = "feladat előtt", "aftertask" = "feladat után")) +
+  scale_color_discrete(labels = c("placebo", "koffein")) +
+  labs(x = NULL, y = "Szubjektív arousal átlag",
+    color = "Kísérleti feltétel"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
 
 manipulation_check_pa <- woman_long %>%
   filter(measure == "edaauc") %>%
@@ -251,47 +265,152 @@ manipulation_check_pa <- woman_long %>%
     Physio_SD = sd(value, na.rm = TRUE))
 print(manipulation_check_pa)
 
-# Plotting PANAS
-woman_long %>%
-  filter(measure == "panas") %>%
-  ggplot() +
-  aes(x = time, y = value) +
-  stat_summary(geom = "pointrange") +
-  facet_grid(condition ~ contracept) +
-  labs(title = "Change in subjective arousal by contraception status and condition", x = NULL, y = NULL)
+summary_mancheck_pa <- woman_long %>%
+  filter(measure == "edaauc", !is.na(value)) %>%
+  group_by(time, condition) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+ggplot(summary_mancheck_pa, aes(x = time, y = mean_value, group = condition)) +
+  geom_line(aes(color = condition), size = 1) +
+  geom_point(aes(color = condition), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "baseline", "beforetask" = "feladat előtt")) +
+  scale_color_discrete(labels = c("placebo", "koffein")) +
+  labs(x = NULL, y = "EDA AUC érték",
+    color = "Kísérleti feltétel"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
 
-woman_long %>%
+# Plotting PANAS
+
+summary_panas <- woman_long %>%
   filter(measure == "panas") %>%
-  group_by(condition) %>%
-  ggplot() +
-  aes(x = time, y = value, group = condition, color = condition) +
-  stat_summary(geom = "pointrange") +
-  labs(title = "Szubjektív arousal az egyes mérési pontokban",
-       x = NULL, y = NULL,
-       color = "Kísérleti feltétel") +
+  group_by(time, condition, contracept) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+
+ggplot(summary_panas, aes(x = time, y = mean_value, group = interaction(condition, contracept))) +
+  geom_line(aes(color = condition, linetype = contracept), size = 1) +
+  geom_point(aes(color = condition, shape = contracept), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
   scale_x_discrete(labels = c("baseline" = "baseline", "beforetask" = "feladat előtt", "aftertask" = "feladat után")) +
   scale_color_discrete(labels = c("placebo", "koffein")) +
-  theme_minimal()
+  scale_linetype_discrete(labels = c("Nem", "Igen")) +
+  scale_shape_discrete(labels = c("Nem", "Igen")) +
+  labs(x = NULL, y = "Szubjektív arousal átlag",
+    color = "Kísérleti feltétel",
+    linetype = "Fogamzásgátlási státusz",
+    shape = "Fogamzásgátlási státusz"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
 
-woman_long %>%
+
+summary_panas_2 <- woman_long %>%
   filter(measure == "panas", !is.na(cycle_phase3)) %>%
-  ggplot() +
-  aes(x = time, y = value) +
-  stat_summary(geom = "pointrange") +
-  facet_grid(condition~cycle_phase3) +
-  labs(title = "Change in subjective arousal by condition and the 3 cycle phases", x = NULL, y = NULL)
+  group_by(time, cycle_phase3, contracept, condition) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
 
-woman_long %>%
-  filter(measure == "panas", !is.na(cycle_phase5)) %>%
-  ggplot() +
-  aes(x = time, y = value) +
-  stat_summary(geom = "pointrange") +
-  facet_grid(condition~cycle_phase5) +
-  labs(title = "Change in subjective arousal by the 5 cycle phases", x = NULL, y = NULL)
-
+ggplot(summary_panas_2, aes(x = time, y = mean_value, group = interaction(cycle_phase3, contracept, condition))) +
+  geom_line(aes(color = condition, linetype = contracept), size = 1) +
+  geom_point(aes(color = condition, shape = cycle_phase3), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "baseline", "beforetask" = "feladat előtt", "aftertask" = "feladat után")) +
+   scale_color_discrete(labels = c("placebo", "koffein")) +
+  scale_linetype_discrete(labels = c("Nem", "Igen")) +
+  scale_shape_discrete(labels = c("follikuláris", "ovulációs", "luteális")) +
+  labs(x = NULL, y = "Szubjektív arousal átlag",
+    color = "Kísérleti feltétel",
+    linetype = "Fogamzásgátlási státusz",
+    shape = "Menstruációs ciklus aktuális szakasza"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
 
 
 # Plotting EDA
+summary_edaauc <- woman_long %>%
+  filter(measure == "edaauc", !is.na(value)) %>%
+  group_by(time, condition, contracept) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+
+ggplot(summary_edaauc, aes(x = time, y = mean_value, group = interaction(condition, contracept))) +
+  geom_line(aes(color = condition, linetype = contracept), size = 1) +
+  geom_point(aes(color = condition, shape = contracept), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "baseline", "beforetask" = "feladat előtt")) +
+  scale_color_discrete(labels = c("placebo", "koffein")) +
+  scale_linetype_discrete(labels = c("Nem", "Igen")) +
+  scale_shape_discrete(labels = c("Nem", "Igen")) +
+  labs(x = NULL, y = "EDA AUC érték",
+    color = "Kísérleti feltétel",
+    linetype = "Fogamzásgátlási státusz",
+    shape = "Fogamzásgátlási státusz"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+
+summary_edaauc_2 <- woman_long %>%
+  filter(measure == "edaauc", !is.na(value), !is.na(cycle_phase3)) %>%
+  group_by(time, cycle_phase3, contracept, condition) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+
+ggplot(summary_edaauc_2, aes(x = time, y = mean_value, group = interaction(cycle_phase3, contracept, condition))) +
+  geom_line(aes(color = condition, linetype = contracept), size = 1) +
+  geom_point(aes(color = condition, shape = cycle_phase3), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "baseline", "beforetask" = "feladat előtt")) +
+   scale_color_discrete(labels = c("placebo", "koffein")) +
+  scale_linetype_discrete(labels = c("Nem", "Igen")) +
+  scale_shape_discrete(labels = c("follikuláris", "ovulációs", "luteális")) +
+  labs(x = NULL, y = "EDA AUC érték",
+    color = "Kísérleti feltétel",
+    linetype = "Fogamzásgátlási státusz",
+    shape = "Menstruációs ciklus aktuális szakasza"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
 woman_normcycle %>%
   group_by(condition) %>%
   ggplot() +
@@ -404,7 +523,12 @@ man_check_sa <-
          (1 | PARTICIPANT_ID),
        data = _)
 summary(man_check_sa)
-emmeans(man_check_sa, pairwise ~ condition * time)
+tab_model(man_check_sa, show.std = TRUE, show.se = TRUE)
+pairwise_sa <- emmeans(man_check_sa, pairwise ~ condition * time)
+summary(pairwise_sa)
+effect_size_sa <- eff_size(pairwise_sa, sigma = sigma(man_check_sa), edf = df.residual(man_check_sa))
+summary(effect_size_sa)
+
 
 man_check_pa <-
   woman_long |> 
@@ -414,7 +538,10 @@ man_check_pa <-
          (1 | PARTICIPANT_ID),
        data = _)
 summary(man_check_pa)
-emmeans(man_check_pa, pairwise ~ condition * time)
+tab_model(man_check_pa, show.se = TRUE, show.std = TRUE)
+pairwise_pa <- emmeans(man_check_pa, pairwise ~ condition * time)
+effect_size_pa <- eff_size(pairwise_pa, sigma = sigma(man_check_pa), edf = df.residual(man_check_pa))
+summary(effect_size_pa)
 
 ## Subjective arousal models
 model_panas_1 <-
