@@ -1,0 +1,607 @@
+---
+title: "analysis"
+author: "Flora Janku"
+date: "2025-03-17"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lme4)
+library(performance)
+library(sjPlot)
+library(skimr)
+library(ggeffects)
+library(emmeans)
+library(effectsize)
+
+theme_set(theme_minimal())
+```
+
+## Loading the dataset
+
+```{r}
+media_df <- read_csv("media_real.csv")
+glimpse(media_df)
+```
+
+## Data tidying
+
+```{r}
+# No duplicates
+sum(duplicated(media_df$PARTICIPANT_ID))
+# No missing in condition
+skim(media_df$condition)
+# One missing in contracept
+media_df %>%
+  filter(gender == "Female") %>%
+  skim(contracept)
+# Typo in weight
+z_scores <- (media_df$weight - mean(media_df$weight)) / sd(media_df$weight)
+outliers <- media_df$weight[abs(z_scores) > 3]
+print(outliers)
+```
+
+## Calculating variables
+
+```{r}
+# Calculated PANAS, baseline MF and VS task performance change means
+cycle_df <-
+  media_df |> 
+  # Dropping irrelevant and NA cases
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept), !is.na(condition)) |> 
+  mutate(# Setting baselines
+         condition = fct_relevel(condition, "placebo"),
+         contracept = fct_relevel(contracept, "No"),
+         caffeine_perday = fct_relevel(caffeine_perday, c("I don't consume caffeine", "25-55 mg/day", "75-80 mg/day", "80-100 mg/day", "100-130 mg/day", "130-160 mg/day", "160-240 mg/day", "240-320 mg/day", "320-400 mg/day")),
+         # Correcting typo in weight
+         weight = ifelse(weight == 565, 56.5, weight),
+         # Calculating scales
+         panas_baseline_mean = (panas_baseline_3 + panas_baseline_9)/2,
+         panas_beforetask_mean = (panas_beforetask_3 + panas_beforetask_9)/2,
+         panas_aftertask_mean = (panas_aftertask_3 + panas_aftertask_9)/2,
+         mf_baseline_mean = (mf_baseline_1 + mf_baseline_2 + mf_baseline_3 + mf_baseline_4)/4,
+         vs_change = vs_end_avg_accuracy - vs_baseline_avg_accuracy,
+         caffeine_perday = str_remove(caffeine_perday, " mg/day"),
+         # Calculating cycle phase
+         cycle_length = case_when(is.na(cycle_length) ~ 28, 
+                                  cycle_length < 20 ~ 28,
+                                  TRUE ~ cycle_length),
+        across(ends_with("Date"), as.Date),
+        days_between = onsite_RecordedDate - screener_RecordedDate,
+        current_day = (as.numeric(cycle_day + days_between - 1) %% cycle_length) + 1,
+        cycle_phase = (current_day / cycle_length) * 2 * pi,
+        sin_cycle = sin(cycle_phase),
+        cos_cycle = cos(cycle_phase),
+    sin_cycle_c = sin_cycle - mean(sin_cycle, na.rm = TRUE),
+    cos_cycle_c = cos_cycle - mean(cos_cycle, na.rm = TRUE),
+    mf_baseline_mean_c = mf_baseline_mean - mean(mf_baseline_mean, na.rm = TRUE))
+
+glimpse(cycle_df)
+
+cycle_df_phases <- cycle_df %>%
+  filter(!is.na(cycle_phase)) %>%
+  mutate(phase = case_when(cycle_phase < pi / 2 ~ "Menstrual",
+    cycle_phase >= pi / 2 & cycle_phase < pi ~ "Follicular",
+    cycle_phase >= pi & cycle_phase < 3 * pi / 2 ~ "Ovulatory",
+    TRUE ~ "Luteal"),
+    phase = factor(phase, levels = c("Menstrual", "Follicular", "Ovulatory", "Luteal")))
+
+glimpse(cycle_df_phases)
+```
+
+## Pivoting to long format
+
+```{r}
+cdf_long <-                      
+  cycle_df |>
+  select(PARTICIPANT_ID,
+          condition,
+          age,
+          contracept,
+          cycle_length, cycle_day,
+          cycle_phase, sin_cycle, cos_cycle, phase,
+          sin_cycle_c, cos_cycle_c,
+          caffeine_perday,
+          panas_baseline = panas_baseline_mean, 
+          panas_beforetask = panas_beforetask_mean, 
+          panas_aftertask = panas_aftertask_mean, 
+          eda_baseline = eda_avg_baseline, 
+          eda_beforetask = eda_avg_beforetask, 
+          edaauc_baseline = eda_auc_baseline,
+          edaauc_beforetask = eda_auc_beforetask,
+          vsaccuracy_baseline = vs_baseline_avg_accuracy, 
+          vsaccuracy_end = vs_end_avg_accuracy, 
+          vs_change,
+          mf_baseline_mean, mf_baseline_mean_c) |>
+  pivot_longer(cols = c(panas_baseline, panas_beforetask, panas_aftertask, eda_baseline, eda_beforetask, edaauc_baseline, edaauc_beforetask, vsaccuracy_baseline, vsaccuracy_end), 
+               names_to = c("measure", "time"), 
+               names_sep = "_", 
+               values_to = "value") |>
+  mutate(time = fct_relevel(time, "baseline", "beforetask", "aftertask", "end"))
+```
+
+## Exploratory analysis and visualizations
+
+```{r}
+# Manipulation check for subjective arousal
+manipulation_check_sa <- cdf_long %>%
+  filter(measure == "panas") %>%
+  group_by(condition, time) %>%
+  summarize(
+    Subjective_Mean = mean(value, na.rm = TRUE),
+    Subjective_SD = sd(value, na.rm = TRUE))
+print(manipulation_check_sa)
+
+summary_mancheck_sa <- cdf_long %>%
+  filter(measure == "panas") %>%
+  group_by(time, condition) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+ggplot(summary_mancheck_sa, aes(x = time, y = mean_value, group = condition)) +
+  geom_line(aes(color = condition), size = 1) +
+  geom_point(aes(color = condition), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "Baseline", "beforetask" = "Before task", "aftertask" = "After task")) +
+  scale_color_discrete(labels = c("placebo", "caffeine")) +
+  labs(x = NULL, y = "Mean subjective arousal",
+    color = "Experimental condition"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+# Manipulation check for physiological arousal
+
+manipulation_check_pa <- cdf_long %>%
+  filter(measure == "edaauc") %>%
+  group_by(condition, time) %>%
+  summarize(
+    Physio_Mean = mean(value, na.rm = TRUE),
+    Physio_SD = sd(value, na.rm = TRUE))
+print(manipulation_check_pa)
+
+summary_mancheck_pa <- cdf_long %>%
+  filter(measure == "edaauc", !is.na(value)) %>%
+  group_by(time, condition) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+ggplot(summary_mancheck_pa, aes(x = time, y = mean_value, group = condition)) +
+  geom_line(aes(color = condition), size = 1) +
+  geom_point(aes(color = condition), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "Baseline", "beforetask" = "Before task")) +
+  scale_color_discrete(labels = c("placebo", "caffeine")) +
+  labs(x = NULL, y = "EDA AUC",
+    color = "Experimental condition"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+# Subjective arousal visualizations
+summary_panas <- cdf_long %>%
+  filter(measure == "panas") %>%
+  group_by(time, condition, contracept) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+
+ggplot(summary_panas, aes(x = time, y = mean_value, group = interaction(condition, contracept))) +
+  geom_line(aes(color = condition, linetype = contracept), size = 1) +
+  geom_point(aes(color = condition, shape = contracept), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "Baseline", "beforetask" = "Before task", "aftertask" = "After task")) +
+  scale_color_discrete(labels = c("placebo", "caffeine")) +
+  scale_linetype_discrete(labels = c("No", "Yes")) +
+  scale_shape_discrete(labels = c("No", "Yes")) +
+  labs(x = NULL, y = "Mean subjective arousal",
+    color = "Condition",
+    linetype = "Contraception status",
+    shape = "Contraception status"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+# EDA visualizations
+summary_edaauc <- cdf_long %>%
+  filter(measure == "edaauc", !is.na(value)) %>%
+  group_by(time, condition, contracept) %>%
+  summarize(
+    mean_value = mean(value),
+    se_value = sd(value) / sqrt(n())
+  )
+
+ggplot(summary_edaauc, aes(x = time, y = mean_value, group = interaction(condition, contracept))) +
+  geom_line(aes(color = condition, linetype = contracept), size = 1) +
+  geom_point(aes(color = condition, shape = contracept), size = 3) +
+  geom_errorbar(aes(ymin = mean_value - se_value, ymax = mean_value + se_value, color = condition), 
+                width = 0.2) +
+  scale_x_discrete(labels = c("baseline" = "Baseline", "beforetask" = "Before task")) +
+  scale_color_discrete(labels = c("placebo", "caffeine")) +
+  scale_linetype_discrete(labels = c("No", "Yes")) +
+  scale_shape_discrete(labels = c("No", "Yes")) +
+  labs(x = NULL, y = "EDA AUC",
+    color = "Condition",
+    linetype = "Contraception status",
+    shape = "Contraception status"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+# Visualizing menstrual cycle phases
+cdf_long %>%
+  filter(measure == "panas") %>%
+  ggplot(aes(x = cycle_phase, y = value, color = condition)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ sin(x) + cos(x)) +
+  scale_x_continuous(breaks = seq(0, 2*pi, by = pi/2),
+                     labels = c("Menstruation", "Midfollicular", "Ovulation", "Midluteal", "Premenstrual")) +
+  labs(x = "Menstrual cycle phase", y = "Subjective arousal") +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+cdf_long %>%
+  filter(measure == "edaauc") %>%
+  ggplot(aes(x = cycle_phase, y = value, color = condition, linetype = contracept, shape = contracept)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ sin(x) + cos(x)) +
+  scale_x_continuous(breaks = seq(0, 2*pi, by = pi/2),
+                     labels = c("Menstruation", "Midfollicular", "Ovulation", "Midluteal", "Premenstrual")) +
+  labs(x = "Menstrual cycle phase", y = "Physiological arousal",
+       color = "Condition", linetype = "Contraceptive use", shape = "Contraceptive use") +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+cdf_long %>%
+  filter(measure == "edaauc") %>%
+  ggplot(aes(x = cycle_phase, y = value, color = condition)) +
+  geom_smooth(method = "lm", se = TRUE) +
+  facet_wrap(~contracept) +
+  scale_x_continuous(breaks = seq(0, 2*pi, by = pi/2),
+                     labels = c("Menstruation", "Midfollicular", "Ovulation", "Midluteal", "Premenstrual")) +
+  labs(x = "Sin Cycle", y = "Outcome (Value)")
+
+cdf_long %>%
+  filter(measure == "edaauc") %>%
+ggplot(aes(x = sin_cycle, y = value, color = condition, linetype = contracept)) +
+  geom_smooth(method = "loess", se = TRUE) +
+  labs(x = "Sin Cycle", y = "Physiological arousal (Electrodermal Activity AUC)", color = "Condition", linetype = "Contraceptive use") +
+  scale_color_discrete(labels = c("placebo", "caffeine")) +
+  scale_linetype_discrete(labels = c("No", "Yes"))
+
+
+# Descriptive visualizations
+ggplot(cycle_df, aes(x = sin_cycle)) +
+  geom_histogram(bins = 15, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of sin_cycle", x = "sin_cycle", y = "Count") +
+  theme_minimal()
+
+ggplot(cdf_long, aes(x = cos_cycle)) +
+  geom_histogram(bins = 15, fill = "salmon", color = "black", alpha = 0.7) +
+  labs(title = "Distribution of cos_cycle", x = "cos_cycle", y = "Count") +
+  theme_minimal()
+
+descriptive_phases <- cycle_df_phases %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(phase), !is.na(contracept)) %>%
+  mutate(Group = ifelse(contracept == "Yes", "Yes", "No"))
+
+count_phases <- descriptive_phases %>%
+  group_by(phase, Group) %>%
+  summarise(Count = n(), .groups = 'drop')
+
+descriptive_phases %>%
+  ggplot() +
+  aes(x = Group, fill = phase) +
+  geom_bar(position = "stack") +
+   geom_text(data = count_phases, 
+            aes(x = Group, y = Count, label = Count, group = phase),
+            position = position_stack(vjust = 0.5), color = "white", family = "serif") +
+  labs(x = "Contraception status",
+       y = NULL,
+       fill = "Cycle phase") +
+   scale_fill_manual(values = c("Menstrual" = "blue", "Follicular" = "green", 
+                                "Ovulatory" = "orange", "Luteal" = "red")) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+
+ggplot(cycle_df_phases, aes(x = cycle_phase, y = 1, color = phase)) +
+  geom_point(size = 4, alpha = 0.8) +
+  coord_polar(theta = "x") +
+  scale_x_continuous(breaks = seq(0, 2*pi, by = pi/2),
+                     labels = c("Menstruation", "Follicular", "Ovulation", "Luteal", "Menstruation")) +
+  labs(title = "Cyclic Representation of Menstrual Phases", x = "Cycle Phase", y = "") +
+  theme_minimal()
+
+descriptive_stats <- cycle_df %>%
+  filter(gender == "Female", cycle_regular == "Yes", !is.na(contracept)) %>%
+  mutate(Cycle_Status = ifelse(is.na(cycle_day), "Not provided", "Provided"),
+         Group = ifelse(contracept == "Yes", "Yes", "No"))
+
+count_data <- descriptive_stats %>%
+  group_by(Group, Cycle_Status) %>%
+  summarise(Count = n(), .groups = 'drop')
+
+descriptive_stats %>%
+  ggplot() +
+  aes(x = Group, fill = Cycle_Status) +
+  geom_bar(position = "stack") +
+   geom_text(data = count_data, 
+            aes(x = Group, y = Count, label = Count, group = Cycle_Status),
+            position = position_stack(vjust = 0.5), color = "white", family = "serif") +
+  labs(x = "Contraception status",
+       y = NULL,
+       fill = "Information about cycle") +
+   scale_fill_manual(values = c("Not provided" = "chartreuse4", "Provided" = "skyblue")) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+```
+
+## Building the models
+
+```{r}
+# Manipulation check
+mancheck_sa <-
+  cdf_long |> 
+  filter(measure == "panas") |> 
+  lmer(value ~ condition * time +
+         caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(mancheck_sa)
+pairwise_sa <- emmeans(mancheck_sa, pairwise ~ condition | time)
+effsize_sa <- eff_size(pairwise_sa, sigma = sigma(mancheck_sa), edf = df.residual(mancheck_sa))
+summary(effsize_sa)
+
+mancheck_pa <-
+  cdf_long |> 
+  filter(measure == "edaauc") |> 
+  lmer(value ~ condition * time +
+         caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(mancheck_pa)
+pairwise_pa <- emmeans(mancheck_pa, pairwise ~ condition | time)
+effsize_pa <- eff_size(pairwise_pa, sigma = sigma(mancheck_pa), edf = df.residual(mancheck_pa))
+summary(effsize_pa)
+
+# Subjective arousal models
+model_panas_1 <-
+  cdf_long |> 
+  filter(measure == "panas") |> 
+  lmer(value ~ condition * time +
+         contracept * condition +
+         caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_panas_1)
+tab_model(model_panas_1, show.std = TRUE, show.se = TRUE)
+check_collinearity(model_panas_1)
+check_model(model_panas_1)
+
+model_panas_2 <-
+  cdf_long |>
+  filter(measure == "panas") |>
+  lmer(value ~ condition * time +
+         condition * contracept * (sin_cycle + cos_cycle) +
+         time * (sin_cycle + cos_cycle) +
+         caffeine_perday + mf_baseline_mean + 
+         (1 | PARTICIPANT_ID), 
+       data = _)
+summary(model_panas_2)
+tab_model(model_panas_2, show.std = TRUE, show.se = TRUE)
+check_collinearity(model_panas_2)
+check_model(model_panas_2)
+
+# Physiological arousal models
+model_auc_1 <-
+  cdf_long %>%
+  filter(measure == "edaauc") |>
+  lmer(value ~ condition * time +
+         contracept * condition +
+         caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_auc_1)
+tab_model(model_auc_1, show.std = TRUE, show.se = TRUE)
+check_collinearity(model_auc_1)
+model_performance(model_auc_1)
+check_model(model_auc_1)
+
+model_auc_2 <-
+  cdf_long %>%
+  filter(measure == "edaauc") |>
+  lmer(value ~ condition * time +
+         condition * contracept * (sin_cycle + cos_cycle) +
+         time * (sin_cycle + cos_cycle) +
+         caffeine_perday + mf_baseline_mean +
+         (1 | PARTICIPANT_ID),
+       data = _)
+summary(model_auc_2)
+tab_model(model_auc_2, show.std = TRUE, show.se = TRUE)
+check_collinearity(model_auc_2)
+```
+
+## Visualizing models
+
+```{r}
+# SA
+coefficients <- fixef(model_panas_1)
+cdf_long %>%
+  filter(measure == "panas") %>%
+  summarize(sdvalue = sd(value))
+
+fixed_effects_1 <- broom.mixed::tidy(model_panas_1, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_1, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+
+fixed_effects_2 <- broom.mixed::tidy(model_panas_2, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_2, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallumokkal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+
+predicted_data_panas <- ggpredict(model_panas_2, terms = c("sin_cycle", "condition", "contracept"))
+
+ggplot(predicted_data_panas, aes(x = x, y = predicted, color = group, linetype = facet)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.2) +
+  scale_color_manual(values = c("salmon", "skyblue")) +  # Adjust colors
+  labs(x = "Sin Cycle",
+    y = "Predicted subjective arousal value",
+    fill = "Condition",
+    color = "Condition",
+    linetype = "Contraceptive use"
+  ) +
+  theme(
+    axis.title = element_text(family = "serif"),
+    axis.text = element_text(family = "serif"),
+    legend.title = element_text(family = "serif"),
+    legend.text = element_text(family = "serif")
+  )
+
+ggplot(predicted_data_panas, aes(x = x, y = predicted, color = group)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.2) +
+  facet_wrap(~facet) +  # Facet by contraceptive use
+  labs(
+    title = "Interaction of Condition, Contraceptive Use, and Sin Cycle",
+    x = "Sin Cycle",
+    y = "Predicted Value",
+    color = "Condition"
+  )
+
+# EDA AUC
+
+fixed_effects_auc1 <- broom.mixed::tidy(model_auc_1, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_auc1, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+
+fixed_effects_auc2 <- broom.mixed::tidy(model_auc_2, effects = "fixed", conf.int = TRUE)
+ggplot(fixed_effects_auc2, aes(x = term, y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  coord_flip() +
+  labs(title = "Főhatások, 95%-os konfidencia intervallummal",
+       x = NULL,
+       y = NULL) +
+  theme_minimal()
+
+predicted_data <- ggpredict(model_auc_2, terms = c("sin_cycle", "condition", "contracept"))
+
+ggplot(predicted_data, aes(x = x, y = predicted, color = group, linetype = facet)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.2) +
+  scale_color_manual(values = c("salmon", "skyblue")) +  # Adjust colors
+  labs(
+    title = "Interaction of Condition, Contraceptive Use, and Sin Cycle",
+    x = "Sin Cycle",
+    y = "Predicted Value",
+    color = "Condition",
+    linetype = "Contraceptive Use"
+  )
+
+ggplot(predicted_data, aes(x = x, y = predicted, color = group)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = group), alpha = 0.2) +
+  facet_wrap(~facet) +  # Facet by contraceptive use
+  labs(
+    title = "Interaction of Condition, Contraceptive Use, and Sin Cycle",
+    x = "Sin Cycle",
+    y = "Predicted Value",
+    color = "Condition"
+  )
+
+ggplot(cdf_long, aes(x = cycle_phase, y = value, fill = condition)) +
+  geom_boxplot(alpha = 0.6, position = position_dodge(width = 0.8)) +
+  facet_wrap(~ contracept) +  # Separate by contraceptive use
+  labs(
+    title = "Effect of Condition and Contraception on Arousal by Cycle Phase",
+    x = "Menstrual Cycle Phase",
+    y = "Physiological Arousal (Value)",
+    fill = "Condition"
+  )
+
+cdf_long %>%
+  filter(measure == "edaauc", !is.na(value)) %>%
+ggplot(aes(x = sin_cycle, y = value, color = condition)) +
+  geom_point(alpha = 0.3) +  # Scatter points
+  geom_smooth(method = "loess", se = TRUE) +  # Smooth trend line
+  facet_wrap(~ contracept) +  # Separate by contraceptive use
+  labs(x = "Sin Cycle",
+    y = "Physiological arousal (EDA AUC)",
+    color = "Condition"
+  )
+
+cdf_long %>%
+  filter(measure == "panas", !is.na(value)) %>%
+ggplot(aes(x = sin_cycle, y = value, color = condition)) +
+  geom_point(alpha = 0.3) +  # Scatter points
+  geom_smooth(method = "loess", se = TRUE) +  # Smooth trend line
+  facet_wrap(~ contracept) +  # Separate by contraceptive use
+  labs(
+    title = "Effect of Menstrual Cycle on Subjective Arousal",
+    x = "Sin Cycle (Phase Progression)",
+    y = "Physiological Arousal (Value)",
+    color = "Condition"
+  ) +
+  theme_minimal()
+```
